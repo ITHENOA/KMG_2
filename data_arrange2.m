@@ -1,16 +1,16 @@
 clear;clc
 
 % ADJUSTBLE PARAMETERS
-windowSize = 200;
-overlap = 160;
+windowSize = 100;
+overlap = 70;
 % incrimental = 10; ?
-imgSize = [28 28];
+% imgSize = [28 28];
 
 % FIX PARAMETERS
 classes = categorical(1:11);
 
 % CREATE FOLDER
-parentFolder = "data_sig_win200_ov160";
+parentFolder = "data\win100_ov70";
 for i = 1:11
     filename = fullfile(parentFolder,string(classes(i)));
     if ~isfolder(filename)
@@ -19,7 +19,7 @@ for i = 1:11
 end
 
 % LOAD SIGNAL
-sig = load("agregated11.mat").agregated11;
+sig = load("data\agregated11.mat").agregated11;
 
 %% MAIN LOOP
 % for i = 1:windowSize:size(sig,1)
