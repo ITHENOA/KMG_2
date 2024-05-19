@@ -14,6 +14,7 @@ function windows = windowID(signalSize, windowSize, overlap)
 % 14-May-2024 by ITHENOA.   {works with samples}
 % -------------------------------------------------------------------------
 
+if windowSize < overlap, error("windowSize < overlap"), end
 % first window
 windows = 1:windowSize;
 % main loop
