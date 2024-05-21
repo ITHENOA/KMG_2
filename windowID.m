@@ -12,6 +12,7 @@ function windows = windowID(signalSize, windowSize, overlap)
 %
 % EDIT:
 % 14-May-2024 by ITHENOA.   {works with samples}
+% 21-May-2024 by ITHENOA.   {add progress bar}
 % -------------------------------------------------------------------------
 
 if windowSize < overlap, error("windowSize < overlap"), end
@@ -30,4 +31,5 @@ while true
     windows = cat(1, windows, windowStart:windowEnd);
     % stop condition
     if windowEnd(end) == signalSize, break, end
+    pbar(windowEnd,signalSize,"Info",'Windowing...')
 end

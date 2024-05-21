@@ -1,8 +1,8 @@
 clear;clc
 
 % ADJUSTBLE PARAMETERS
-windowSize = 100;
-overlap = 70;
+windowSize = 150;
+overlap = 140;
 % incrimental = 10; ?
 % imgSize = [28 28];
 
@@ -10,7 +10,7 @@ overlap = 70;
 classes = categorical(1:11);
 
 % CREATE FOLDER
-parentFolder = "data\win100_ov70";
+parentFolder = "data\win150_ov140";
 for i = 1:11
     filename = fullfile(parentFolder,string(classes(i)));
     if ~isfolder(filename)
@@ -42,7 +42,7 @@ for window = windowsIdx'
 
     % progress bar
     i = i + 1;
-    pbar(i,size(windowsIdx,1))
+    pbar(i,size(windowsIdx,1), "Info",'data arranging ...')
 end
 
 %% FUNCTIONS
