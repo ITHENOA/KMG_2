@@ -1,0 +1,35 @@
+function windows = windowID(signalSize, windowSize, overlap) 
+% -------------------------------------------------------------------------
+% INPUT
+%   signalSize
+%   windowSize
+%   overlap
+% OUTPUT
+%   windows (rows: window indeces) (columns: number of windows)
+%
+% NOTE:
+%   to keep windowSize in last window, reduced overlap.
+%
+% EDIT:
+% 14-May-2024 by ITHENOA.   {works with samples}
+% 21-May-2024 by ITHENOA.   {add progress bar}
+% -------------------------------------------------------------------------
+
+if windowSize < overlap, error("windowSize < overlap"), end
+% first window
+windows = 1:windowSize;
+% main loop
+while true
+    Start = windows(end,end) - overlap + 1;
+    End = Start + windowSize - 1;
+    % for last window
+    if End(end) > signalSize
+        End = signalSize;
+        Start = End - windowSize + 1;
+    end
+    % concatination
+    windows = cat(1, windows, Start:End);
+    % stop condition
+    if End(end) == signalSize, break, end
+    pbar(End,signalSize,"Info",'Windowing...')
+end
