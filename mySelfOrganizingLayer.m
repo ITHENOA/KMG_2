@@ -1,12 +1,10 @@
-classdef mySelfOrganizingLayer < nnet.layer.Layer % ...
-        % & nnet.layer.Formattable ... % (Optional) 
-        % & nnet.layer.Acceleratable % (Optional)
+classdef mySelfOrganizingLayer < nnet.layer.Layer & nnet.layer.Formattable
+        % & nnet.layer.Acceleratable
 
-    properties
+    properties (Access=public)
         % (Optional) Layer properties.
 
         % Declare layer properties here.
-        matlabFC
         firstBatch = true
     end
 
@@ -18,18 +16,18 @@ classdef mySelfOrganizingLayer < nnet.layer.Layer % ...
         Bias
     end
 
-    properties (State)
-        % (Optional) Layer state parameters.
+    % properties (State)
+    %     % (Optional) Layer state parameters.
+    % 
+    %     % Declare state parameters here.
+    % end
 
-        % Declare state parameters here.
-    end
-
-    properties (Learnable, State)
-        % (Optional) Nested dlnetwork objects with both learnable
-        % parameters and state parameters.
-
-        % Declare nested networks with learnable and state parameters here.
-    end
+    % properties (Learnable, State)
+    %     % (Optional) Nested dlnetwork objects with both learnable
+    %     % parameters and state parameters.
+    % 
+    %     % Declare nested networks with learnable and state parameters here.
+    % end
 
     methods
         function layer = mySelfOrganizingLayer(numInputs, numOutputs, name)
@@ -37,43 +35,35 @@ classdef mySelfOrganizingLayer < nnet.layer.Layer % ...
             % This function must have the same name as the class.
 
             % Define layer constructor function here.
-            % Set layer name.
             layer.Name = name;
 
             % Set layer description.
             layer.Description = "Self-Organizing Layer";
-            
-            % % Initialize learnable parameters.
-            % layer.Weights = randn([numOutputs, numInputs], 'single');
-            % layer.Bias = randn([numOutputs, 1], 'single');
 
-             % Create the built-in fully connected layer
-            layer.matlabFC = fullyConnectedLayer(numOutputs, 'Name', 'internal_fc');
-
-            % Initialize learnable parameters
-            layer.Weights = layer.matlabFC.Weights;
-            layer.Bias = layer.matlabFC.Bias;
+            % Initialize learnable parameters.
+            layer.Weights = randn([numOutputs, numInputs], 'single') * 0.01;
+            layer.Bias = zeros([numOutputs, 1], 'single');
         end
 
-        function layer = initialize(layer,layout)
-            % (Optional) Initialize layer learnable and state parameters.
-            %
-            % Inputs:
-            %         layer  - Layer to initialize
-            %         layout - Data layout, specified as a networkDataLayout
-            %                  object
-            %
-            % Outputs:
-            %         layer - Initialized layer
-            %
-            %  - For layers with multiple inputs, replace layout with 
-            %    layout1,...,layoutN, where N is the number of inputs.
-            
-            % Define layer initialization function here.
-        end
+        % function layer = initialize(layer,layout)
+        %     % (Optional) Initialize layer learnable and state parameters.
+        %     %
+        %     % Inputs:
+        %     %         layer  - Layer to initialize
+        %     %         layout - Data layout, specified as a networkDataLayout
+        %     %                  object
+        %     %
+        %     % Outputs:
+        %     %         layer - Initialized layer
+        %     %
+        %     %  - For layers with multiple inputs, replace layout with 
+        %     %    layout1,...,layoutN, where N is the number of inputs.
+        % 
+        %     % Define layer initialization function here.
+        % end
         
 
-        function [Z,state] = predict(layer,X)
+        function [Z] = predict(layer,X)
             % Forward input data through the layer at prediction time and
             % output the result and updated state.
             %
@@ -93,11 +83,10 @@ classdef mySelfOrganizingLayer < nnet.layer.Layer % ...
             %    parameters.
 
             % Define layer predict function here.
-
-
+            Z = fullyconnect(X,layer.Weights,layer.Bias);
         end
 
-        function [Z,state,memory] = forward(layer,X)
+        function [Z] = forward(layer,X)
             % (Optional) Forward input data through the layer at training
             % time and output the result, the updated state, and a memory
             % value.
@@ -122,66 +111,65 @@ classdef mySelfOrganizingLayer < nnet.layer.Layer % ...
             %%% Define layer forward function here.
             if layer.firstBatch
                 % Stage(0): Initialization
-                initPars()
-                layer.firstBatch = false;
+                % initPars()
             else
                 % Stage(1): Update consequent parameters
-                updatePars()
+                % updatePars()
             end
 
             Z = fullyconnect(X,layer.Weights,layer.Bias);
-            Z = Z * lambdaMTX;
+            % Z = Z * lambdaMTX;
         end
+        
+        % function initPars()
+        % end
+        
+        % function updatePars()
+        % end
 
-        function initPars()
-        end
+        % function layer = resetState(layer)
+        %     % (Optional) Reset layer state.
+        % 
+        %     % Define reset state function here.
+        % end
 
-        function updatePars()
-        end
-
-        function layer = resetState(layer)
-            % (Optional) Reset layer state.
-
-            % Define reset state function here.
-        end
-
-        function [dLdX,dLdW,dLdSin] = backward(layer,X,Z,dLdZ,dLdSout,memory)
-            % (Optional) Backward propagate the derivative of the loss
-            % function through the layer.
-            %
-            % Inputs:
-            %         layer   - Layer to backward propagate through 
-            %         X       - Layer input data 
-            %         Z       - Layer output data 
-            %         dLdZ    - Derivative of loss with respect to layer 
-            %                   output
-            %         dLdSout - (Optional) Derivative of loss with respect 
-            %                   to state output
-            %         memory  - Memory value from forward function
-            % Outputs:
-            %         dLdX   - Derivative of loss with respect to layer input
-            %         dLdW   - (Optional) Derivative of loss with respect to
-            %                  learnable parameter 
-            %         dLdSin - (Optional) Derivative of loss with respect to 
-            %                  state input
-            %
-            %  - For layers with state parameters, the backward syntax must
-            %    include both dLdSout and dLdSin, or neither.
-            %  - For layers with multiple inputs, replace X and dLdX with
-            %    X1,...,XN and dLdX1,...,dLdXN, respectively, where N is
-            %    the number of inputs.
-            %  - For layers with multiple outputs, replace Z and dlZ with
-            %    Z1,...,ZM and dLdZ,...,dLdZM, respectively, where M is the
-            %    number of outputs.
-            %  - For layers with multiple learnable parameters, replace 
-            %    dLdW with dLdW1,...,dLdWP, where P is the number of 
-            %    learnable parameters.
-            %  - For layers with multiple state parameters, replace dLdSin
-            %    and dLdSout with dLdSin1,...,dLdSinK and 
-            %    dLdSout1,...,dldSoutK, respectively, where K is the number
-            %    of state parameters.
-
-            % Define layer backward function here.
-        end
+        % function [dLdX,dLdW,dLdSin] = backward(layer,X,Z,dLdZ,dLdSout,memory)
+        %     % (Optional) Backward propagate the derivative of the loss
+        %     % function through the layer.
+        %     %
+        %     % Inputs:
+        %     %         layer   - Layer to backward propagate through 
+        %     %         X       - Layer input data 
+        %     %         Z       - Layer output data 
+        %     %         dLdZ    - Derivative of loss with respect to layer 
+        %     %                   output
+        %     %         dLdSout - (Optional) Derivative of loss with respect 
+        %     %                   to state output
+        %     %         memory  - Memory value from forward function
+        %     % Outputs:
+        %     %         dLdX   - Derivative of loss with respect to layer input
+        %     %         dLdW   - (Optional) Derivative of loss with respect to
+        %     %                  learnable parameter 
+        %     %         dLdSin - (Optional) Derivative of loss with respect to 
+        %     %                  state input
+        %     %
+        %     %  - For layers with state parameters, the backward syntax must
+        %     %    include both dLdSout and dLdSin, or neither.
+        %     %  - For layers with multiple inputs, replace X and dLdX with
+        %     %    X1,...,XN and dLdX1,...,dLdXN, respectively, where N is
+        %     %    the number of inputs.
+        %     %  - For layers with multiple outputs, replace Z and dlZ with
+        %     %    Z1,...,ZM and dLdZ,...,dLdZM, respectively, where M is the
+        %     %    number of outputs.
+        %     %  - For layers with multiple learnable parameters, replace 
+        %     %    dLdW with dLdW1,...,dLdWP, where P is the number of 
+        %     %    learnable parameters.
+        %     %  - For layers with multiple state parameters, replace dLdSin
+        %     %    and dLdSout with dLdSin1,...,dLdSinK and 
+        %     %    dLdSout1,...,dldSoutK, respectively, where K is the number
+        %     %    of state parameters.
+        % 
+        %     % Define layer backward function here.
+        % end
     end
 end
