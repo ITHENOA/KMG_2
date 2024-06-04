@@ -73,6 +73,26 @@ class SOMFNN(nn.Module):
             loss = self.criterion(outputs, Y)
             print(f'Test Loss: {loss.item():.4f}')
 
+    # def add_neuron(net):
+    #     old_fc = bet.fc
+    #     input_size = old_fc.in_features
+    #     output_size = old_fc.out_features
+
+    #     # Create a new FC layer with an additional neuron
+    #     new_fc = nn.Linear(input_size, output_size + 1)
+        
+    #     # Copy existing weights and biases to the new layer
+    #     with torch.no_grad():
+    #         new_fc.weight[:-1] = old_fc.weight
+    #         new_fc.bias[:-1] = old_fc.bias
+
+    #         # Initialize the new neuron's weights and bias
+    #         nn.init.normal_(new_fc.weight[-1:], mean=0.0, std=1.0)
+    #         nn.init.zeros_(new_fc.bias[-1:])
+
+    #     # Replace the old FC layer with the new one
+    #     net.fc = new_fc
+    #     return net
 
     @staticmethod
     def get_device():
