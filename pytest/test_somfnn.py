@@ -6,12 +6,12 @@ X = torch.randn(100, 3)
 Y = torch.randn(100, 1)
 
 # network
-net = SOMFNN(input_feature=3, hidden_neorun=[], output_feature=1)
+net = SOMFNN(in_features=4, hidden_features=[3,2], out_features=1)
 net.options(
     n_epoch=100, 
     lr=0.01, 
     criterion='MSE', 
     optimizer='Adam'
     )
-net.train(X, Y)
-net.test(X, Y)
+net.trainnet(X,Y)
+net.testnet(X, Y)

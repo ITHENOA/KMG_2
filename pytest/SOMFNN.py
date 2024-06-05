@@ -1,76 +1,127 @@
 import torch
 from torch import nn
 import torch.optim as optim
+from torch.functional import F 
+import numpy as np
+
+class Rule:
+    def __init__(rul, NO=None, xk=None, SEN_xk=None):
+        rul.NO = NO
+        rul.P = xk
+        rul.Cc = xk
+        rul.CX = 1
+        rul.CS = 1
+
+    def square_euclidean_distance(rul,x,pn):
+        return torch.sqrt(torch.sum((x-pn)**2))
+    
+    def rule_density(rul,x,pn,taun):
+        SEN_x = rul.square_euclidean_distance(x,pn)
+        return torch.exp(-(SEN_x/taun)**2)
+
+    def update(R):
+        pass
+
+class Layer:
+    def __init__(lay, NO=None, M=None, W=None):
+        # Rule.__init__(net)
+        lay.NO = NO # layer number
+        lay.M = M # number of inputs
+        lay.W = W # number of outputs
+        lay.N = 0 # number of rules
+        lay.g_mu = torch.zeros(M,1) # Global 
+        lay.g_X = 0 #?  # Global
+        # net.CS = 0  
+        # fill_mat = round(5/2) # max_rule = n_layers
+        # net.tau = torch.zeros(fill_mat,1)
+        # net.Cc, net.P = torch.zeros(net.M,fill_mat)
+        # net.CX = torch.zeros(1,fill_mat)
+        # net.A = []
+        lay.rules_obj = []
+
+    def add_rule(lay):
+        lay.rules_obj.append(Rule(lay.N))
+        lay.N += 1
+        
+
 
 class SOMFNN(nn.Module):
-    def __init__(self, in_features=3, hidden_features=[], out_features=1):
-        super(SOMFNN, self).__init__()
-        # self.neurons = [in_features, hidden_features, out_features]
-        # self.n_layer = len(self.neurons) + 2
-        self.fc = []
-        for l in range(1, self.n_layer + 1):
-            self.fc.append(nn.Linear(self.neurons[l-1], self.neurons[l]))
-        self.criterion = None
-        self.optimizer = None
-        self.n_epoch = None
-        self.device = self.get_device()
-        self.to(self.device)
+    def __init__(net, in_features=3, hidden_features=[], out_features=1):
+        super(SOMFNN, net).__init__()
+        # nn.Module.__init__(net)
+        # Layer.__init__(net)
+        if isinstance(in_features, int): in_features = [in_features] 
+        if isinstance(out_features, int): out_features = [out_features] 
+        net.neurons = in_features + hidden_features + out_features # [M1, W1=M2, W2=M3, ..., Wend-1=Mend, Wend]
+        net.n_layers = len(net.neurons) - 1
+        net.layers_obj = []
+        net.fc = nn.ModuleList()
+        for l in range(net.n_layers):
+            net.fc.append(nn.Linear(net.neurons[l], net.neurons[l+1]))
+            net.layers_obj.append(Layer(l, net.neurons[l], net.neurons[l+1]))
+        net.criterion = None
+        net.optimizer = None
+        net.n_epoch = None
+        net.device = net.get_device()
+        net.to(net.device)
 
-
-    def forward(self, x):
-        for layer in range(1,self.n_layer):
-            x = self.fc[layer](x)
-            x = self.lambda_func(self, layer, x)
+    def forward(net, x):
+        for l in range(net.n_layer):
+            net.layers_obj[l]
+            x = F.sigmoid(net.fc[l](x))
+            x = net.lambda_func(l, x)
         return x
-    
 
-    def options(self, n_epoch=10, lr=0.01, criterion='MSE', optimizer='SGD'):
+    def lambda_func(net, l, yn):
+        return yn
+        
+    def options(net, n_epoch=10, lr=0.01, criterion='MSE', optimizer='SGD'):
         # Set the criterion
         if criterion == 'MSE':
-            self.criterion = nn.MSELoss()
+            net.criterion = nn.MSELoss()
         elif criterion == 'BCE':
-            self.criterion = nn.BCELoss()
+            net.criterion = nn.BCELoss()
         elif criterion == 'CrossEntropy':
-            self.criterion = nn.CrossEntropyLoss()
+            net.criterion = nn.CrossEntropyLoss()
         else:
             raise ValueError(f"Unsupported criterion type: {criterion}")
         
         # Set the optimizer
         if optimizer == 'SGD':
-            self.optimizer = optim.SGD(self.parameters(), lr=lr)
+            net.optimizer = optim.SGD(net.parameters(), lr=lr)
         elif optimizer == 'Adam':
-            self.optimizer = optim.Adam(self.parameters(), lr=lr)
+            net.optimizer = optim.Adam(net.parameters(), lr=lr)
         elif optimizer == 'RMSprop':
-            self.optimizer = optim.RMSprop(self.parameters(), lr=lr)
+            net.optimizer = optim.RMSprop(net.parameters(), lr=lr)
         else:
             raise ValueError(f"Unsupported optimizer type: {optimizer}")
         
-        self.n_epoch = n_epoch
+        net.n_epoch = n_epoch
 
 
-    def train(self, X, Y):
-        X, Y = X.to(self.device), Y.to(self.device)
-        for epoch in range(self.n_epoch):
-            self.train()
+    def trainnet(net, X, Y):
+        X, Y = X.to(net.device), Y.to(net.device)
+        for epoch in range(net.n_epoch):
+            net.train()
             # Forward pass
-            outputs = self(X)
-            loss = self.criterion(outputs, Y)
+            outputs = net(X)
+            loss = net.criterion(outputs, Y)
 
             # Backward pass and optimization
-            self.optimizer.zero_grad()
+            net.optimizer.zero_grad()
             loss.backward()
-            self.optimizer.step()
+            net.optimizer.step()
             
             if epoch % 10 == 0:
-                print(f"Epoch [{epoch}/{self.n_epoch}], Loss: {loss.item():.4f}")
+                print(f"Epoch [{epoch}/{net.n_epoch}], Loss: {loss.item():.4f}")
 
 
-    def test(self, X, Y):
-        X, Y = X.to(self.device), Y.to(self.device)
-        self.eval()
+    def testnet(net, X, Y):
+        X, Y = X.to(net.device), Y.to(net.device)
+        net.eval()
         with torch.no_grad():
-            outputs = self(X)
-            loss = self.criterion(outputs, Y)
+            outputs = net(X)
+            loss = net.criterion(outputs, Y)
             print(f'Test Loss: {loss.item():.4f}')
 
 
@@ -85,3 +136,4 @@ class SOMFNN(nn.Module):
         )
         print(f"Using {device} device")
         return device
+    
