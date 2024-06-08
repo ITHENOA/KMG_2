@@ -6,7 +6,7 @@ X = torch.randn(100, 3)
 Y = torch.randn(100, 1)
 
 # network
-net = SOMFNN(in_features=4, hidden_features=[3,2], out_features=1)
+net = SOMFNN(in_features=3, hidden_features=[3,2], out_features=1)
 net.options(
     n_epoch=100, 
     lr=0.01, 
