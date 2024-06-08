@@ -1,33 +1,33 @@
-class b:
-    def __init__(self):
+# class b:
+#     def __init__(self):
         
-        self.cc = 3
-    def access():
-        ch = super().aa
-        print("100")
+#         self.cc = 3
+#     def access():
+#         ch = super().aa
+#         print("100")
     
-    @property
-    def dd(self):
-        return self.cc + 10
+#     @property
+#     def dd(self):
+#         return self.cc + 10
 
-class c:
-    def __init__(self):
-        self.gg = 56
+# class c:
+#     def __init__(self):
+#         self.gg = 56
 
-class a(b,c):
-    def __init__(self):
-        b.__init__(self)
-        c.__init__(self)
-        self.aa = 1
-        self.bb = 2
-        print(self.cc)
-        print(self.dd)
-        self.cc = 5
-        print(self.dd)
-        print(self.gg)
+# class a(b,c):
+#     def __init__(self):
+#         b.__init__(self)
+#         c.__init__(self)
+#         self.aa = 1
+#         self.bb = 2
+#         print(self.cc)
+#         print(self.dd)
+#         self.cc = 5
+#         print(self.dd)
+#         print(self.gg)
 
 
-aaa = a()
+# aaa = a()
 
 # a = [4]
 # b = []
@@ -38,3 +38,11 @@ aaa = a()
 # # x = tensor([[1],[2],[3]])
 # # print(torch.transpose(x,1,0)@x)
 # # print(x**2)
+
+xk = {
+    "value": [[1,2,3],[2,3,5]],
+    "SEN": [2,3],
+}
+print(xk)
+print(xk["value"])
+print(xk["SEN"])
