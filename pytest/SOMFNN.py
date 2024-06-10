@@ -1,5 +1,5 @@
 import torch
-from torch import nn
+from torch import nn, tensor, cat
 import torch.optim as optim
 from torch.functional import F 
 import numpy as np
@@ -16,11 +16,12 @@ k = 1
 class Rule:
     def __init__(rul, NO, xk, SENx):
         rul.NO = NO
-        rul.P = xk
+        # rul.P = xk
         # rul.A = ?
         rul.Cc = xk
         rul.CX = SENx
-        rul.CS = 1            
+        rul.CS = 1  
+        rul.dens = 1          
 
     def rule_density(rul,x,pn,taun):
         SEN_x = rul.square_euclidean_distance(x,pn)
@@ -40,33 +41,37 @@ class Layer:
         lay.g_mu = torch.zeros(1,M) # Global Mean
         lay.g_X = 0 #?  # Global Mean of Squared Eugliducian Norm
         lay.RULES = []
+        lay.prototypes = tensor([])
 
-    def __call__(lay, xk):
-
-        SENx = SEN(xk)
-        lay.update_global_pars(xk, SENx)
+    def __call__(lay, xbatch):
+        SENbatch = SEN(xbatch)
+        lay.update_global_pars(xbatch, SENbatch)
         
-        if lay.N == 0:
-            lay.init_rule(xk, SENx)
-        else:
-            if 1:
-                lay.add_rule()
+        for x, SENx in zip(xbatch, SENbatch):
+            if lay.N == 0:
+                lay.init_rule(x, SENx)
+                lay.prototypes = cat([lay.prototypes, x], dim=1)
             else:
-                lay.update_rule()
+                check_dense = lay.rule_condition(x)
+                if 1:
+                    lay.init_rule(x, SENx)
+                else:
+                    lay.update_rule()
 
         return lay
-
-    def update_global_pars(lay, xk, SENx):
-        lay.g_mu = lay.g_mu + (xk - lay.g_mu)/k
+    
+    def rule_condition(lay, x):
+        logit = False
+        SEN(x - lay)
+        return x
+    
+    def update_global_pars(lay, x, SENx):
+        lay.g_mu = lay.g_mu + (x - lay.g_mu)/k
         lay.g_X = lay.g_X + (SENx - lay.g_X)/k
 
-    def init_rule(lay, xk, SENx):
-        lay.RULES.append(Rule(1, xk, SENx))
+    def init_rule(lay, x, SENx):
         lay.N += 1
-
-    def add_rule(lay):
-        lay.rules_info.append(Rule(lay.N))
-        lay.N += 1
+        lay.RULES.append(Rule(lay.N, x, SENx))
 
     def update_rule(lay):
         pass

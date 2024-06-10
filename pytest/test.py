@@ -1,13 +1,13 @@
-from typing import Any
+# from typing import Any
 
 
-class a():
-    def __init__(v) -> None:
-        v.a1 = 1
+# class a():
+#     def __init__(v) -> None:
+#         v.a1 = 1
 
-    def __call__(self,aaa):
-        print(self.a1)
-        return aaa
+#     def __call__(self,aaa):
+#         print(self.a1)
+#         return aaa
     
 # class c(a):
 #     def __init__(self) -> None:
@@ -16,15 +16,15 @@ class a():
 #     def cf(self):
 #         return self.a1
 
-class b(a):
-    def __init__(self) -> None:
-        aa = a()
-        a.__init__(self)
-        print(self.a1)
-        self.a1 = 2
+# class b(a):
+#     def __init__(self) -> None:
+#         aa = a()
+#         a.__init__(self)
+#         print(self.a1)
+#         self.a1 = 2
         
 
-aaa = b()
+# aaa = b()
 
 # a = [4]
 # b = []
@@ -43,3 +43,11 @@ aaa = b()
 # print(xk)
 # print(xk["value"])
 # print(xk["SEN"])
+import numpy as np
+import torch
+l = []
+a = torch.tensor([])
+aa = torch.randn(5,1)
+bb = torch.randn(5,1)
+l = torch.cat([a,aa],dim=1)
+print(a)
