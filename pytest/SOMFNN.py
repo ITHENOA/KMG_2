@@ -4,8 +4,9 @@ import torch.optim as optim
 from torch.functional import F 
 import numpy as np
 
-global k
+global k, delta
 k = 1
+delta = torch.exp(tensor([-2]))
 
 # class parameter_box():
 #     def __init__(self):
@@ -13,22 +14,19 @@ k = 1
 
 
 # -------------------------------RULE----------------------------------
-class Rule:
-    def __init__(rul, NO, xk, SENx):
-        rul.NO = NO
-        # rul.P = xk
-        # rul.A = ?
-        rul.Cc = xk
-        rul.CX = SENx
-        rul.CS = 1  
-        rul.dens = 1          
+# class Rule:
+#     def __init__(rul, NO, xk, SENx):
+#         rul.NO = NO
+#         # rul.P = xk
+#         # rul.A = ?
+#         rul.Cc = xk
+#         rul.CX = SENx
+#         rul.CS = 1  
 
-    def rule_density(rul,x,pn,taun):
-        SEN_x = rul.square_euclidean_distance(x,pn)
-        return torch.exp(-(SEN_x/taun)**2)
 
-    def update(R):
-        pass
+
+#     def update(R):
+#         pass
 
 # ------------------------------LAYER-----------------------------------
 class Layer:
@@ -38,43 +36,93 @@ class Layer:
         lay.M = M # number of inputs
         lay.W = W # number of outputs
         lay.N = 0 # number of rules
-        lay.g_mu = torch.zeros(1,M) # Global Mean
-        lay.g_X = 0 #?  # Global Mean of Squared Eugliducian Norm
-        lay.RULES = []
-        lay.prototypes = tensor([])
+        lay.gmean = torch.zeros(1,M) # Global Mean
+        lay.SENgmean = 0  # Global Mean of Squared Euclidian Norm
+        # lay.RULES = []
+        lay.prototypes = tensor([]) #(rules,features)
+        # lay.stau = tensor([]) #(rules,1)
+        lay.c = tensor([]) #(rules,features) mean of samples in clusters
+        lay.SENc = tensor([]) #(rules,1) squared Euclidian norm of samples in clusters
+        lay.support = tensor([]) #(rules,1) number of samples in clusters
+        # lay.sample_rule = tensor([])
+        lay.n_seen_sample = 0
 
     def __call__(lay, xbatch):
         SENbatch = SEN(xbatch)
-        lay.update_global_pars(xbatch, SENbatch)
-        
+        lay.update_global_pars(xbatch, SENbatch) # update with xbatch or x ???
+        sample_rules = tensor([]) # clusters NO of each sample
+        # lamb = tensor([])
+
+        # sample by sample 
         for x, SENx in zip(xbatch, SENbatch):
+            SENx = SENx.unsqueeze(0)
+            # lay.update_global_pars(x, SENx) # update with xbatch or x ???
             if lay.N == 0:
                 lay.init_rule(x, SENx)
-                lay.prototypes = cat([lay.prototypes, x], dim=1)
+                # lamb = cat([lamb, 1])
+                sample_rules = tensor([0]) # clusters NO of each sample
             else:
-                check_dense = lay.rule_condition(x)
-                if 1:
+                logit, rule_star = lay.rule_condition(x)
+                if logit:
                     lay.init_rule(x, SENx)
+                    sample_rules = cat([sample_rules, lay.N-1], dim=1)
                 else:
-                    lay.update_rule()
+                    lay.update_rule(rule_star, x, SENx)
+                    sample_rules = cat([sample_rules, rule_star], dim=1)
 
+            # lamb = cat([lamb, lay.local_dens(x)], dim=1) #lamb(rule,batch) update with each x or xbatch ???
+        
+        lamb = lay.local_dens(xbatch) #lamb(rule,batch) update with each x or xbatch ???
+        dens_xn = lamb[sample_rules, torch.arange(len(SENbatch))]
+        dens_xi = torch.sum(lamb, dim=1)
+        lamb = dens_xn / dens_xi
         return lay
     
     def rule_condition(lay, x):
-        logit = False
-        SEN(x - lay)
-        return x
+        denses = lay.local_dens(x)
+        value, idx = torch.max(denses, 0)
+        if value < delta:
+            rule_star = []
+            logit = True
+        else:
+            rule_star = idx
+            logit = False
+
+        return logit, rule_star
+
+
+    def local_dens(lay, x, kernel='RBF'):
+        stau = (lay.SENgmean - SEN(lay.gmean) + lay.SENc - SEN(lay.c))/2 # tau**2
+        if kernel == 'RBF':
+            dens = torch.exp(- SEN(x - lay.prototypes) / stau)
+        else: 
+            raise("invalid kernel type")
+        
+        return dens #(rule,1)
     
+
     def update_global_pars(lay, x, SENx):
-        lay.g_mu = lay.g_mu + (x - lay.g_mu)/k
-        lay.g_X = lay.g_X + (SENx - lay.g_X)/k
+        # lay.gmean = lay.gmean + (x - lay.gmean)/k
+        # lay.SENgmean = lay.SENgmean + (SENx - lay.SENgmean)/k
+        lay.gmean = torch.mean(x, dim=0)
+        lay.SENgmean = torch.mean(SENx)
+        lay.n_seen_sample = len(SENx)
+
 
     def init_rule(lay, x, SENx):
         lay.N += 1
-        lay.RULES.append(Rule(lay.N, x, SENx))
+        lay.prototypes = cat([lay.prototypes, x], dim=0)
+        lay.c = cat([lay.c, x])
+        lay.SENc = cat([lay.SENc, SENx], dim=0)
+        lay.support = cat([lay.support, tensor([1], dtype=int)])
+        # lay.RULES.append(Rule(lay.N, x, SENx))
 
-    def update_rule(lay):
-        pass
+
+    def update_rule(lay, rule_star, x, SENx):
+        lay.support[rule_star] =+ 1
+        lay.c[rule_star] = lay.c[rule_star] + (x - lay.c[rule_star]) / lay.support[rule_star]
+        lay.SENc[rule_star] = lay.SENc[rule_star] + (SENx - lay.SENc[rule_star]) / lay.support[rule_star]
+
 
     
         
@@ -179,4 +227,8 @@ def get_device():
 # square_euclidean_distance
 def SEN(x):
     # return torch.sqrt(torch.sum((x)**2))
-    return torch.sum((x)**2)
+    return torch.sum((x)**2, dim=0) # 0 for vector
+
+def rule_density(rul,x,pn,taun):
+    SEN_x = rul.square_euclidean_distance(x,pn)
+    return torch.exp(-(SEN_x/taun)**2)

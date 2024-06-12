@@ -2,8 +2,8 @@ from SOMFNN import SOMFNN
 import torch
 
 # Generate random data
-X = torch.randn(100, 3)
-Y = torch.randn(100, 1)
+X = torch.randn(3,20)
+Y = torch.randn(1,20)
 
 # network
 net = SOMFNN(in_features=3, hidden_features=[3,2], out_features=1)
@@ -13,5 +13,5 @@ net.options(
     criterion='MSE', 
     optimizer='Adam'
     )
-net.trainnet(X,Y)
+net.trainnet(X, Y)
 net.testnet(X, Y)

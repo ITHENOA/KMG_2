@@ -45,9 +45,11 @@
 # print(xk["SEN"])
 import numpy as np
 import torch
-l = []
-a = torch.tensor([])
-aa = torch.randn(5,1)
-bb = torch.randn(5,1)
-l = torch.cat([a,aa],dim=1)
-print(a)
+
+
+a = torch.ones(1,3) * 100
+b = torch.randn(5,8)
+c = torch.tensor([1,0,0,1,0]).view(-1,1)
+print(b)
+print(b[[[1],[2],[2],[2],[4],[4],[4],[4]],torch.arange(8)])
+# print(idx)
