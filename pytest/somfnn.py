@@ -47,6 +47,7 @@ class SOMFNN(nn.Module):
         self.device = get_device()
         self.to(self.device)
 
+
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         """
         The forward pass of the network.
@@ -54,18 +55,22 @@ class SOMFNN(nn.Module):
         # Loop over all layers
         for i in range(self.num_layers):
 
-            X_detached = X.detach()
+            # X_detached = X.detach()
             with torch.no_grad():
                 # Compute lambda functions for the current layer
-                lambdas = self.layers_info[i](X_detached)
+                lambdas = self.layers_info[i](X)
+
             # Update the structure of the current pytorch fc layer
             self.add_neurons(i)
+
             # Compute the output of the current layer
             X = torch.sigmoid(self.fc_layers[i](X))
+
             # Compute the next input for the network
             X = self.apply_rule_strength(i, X, lambdas)
 
         return X
+
 
     def add_neurons(self, layer_index: int) -> None:
         """
@@ -85,6 +90,7 @@ class SOMFNN(nn.Module):
             new_fc.bias.data[:old_out_features] = self.fc_layers[layer_index].bias.data.clone()
             # update self.layers[layer_index]
             self.fc_layers[layer_index] = new_fc
+
 
     def apply_rule_strength(self, layer_index: int, X: torch.Tensor, lambdas: torch.Tensor) -> torch.Tensor:
         """
@@ -109,11 +115,13 @@ class SOMFNN(nn.Module):
         
         return X
 
+
     def set_options(self, num_epochs: int = 10, 
                     learning_rate: float = 0.01, 
                     criterion: str = "MSE", 
                     optimizer: str = "SGD",
-                    training_plot: bool = False):
+                    training_plot: bool = False,
+                    validation_ratio: float = 0):
         """
         Set the training options for the network.
         """
@@ -137,6 +145,8 @@ class SOMFNN(nn.Module):
 
         self.num_epochs = num_epochs
         self.training_plot = training_plot
+        self.validation_ratio = validation_ratio
+
 
     def trainnet(net, dataloader: DataLoader) -> None:
         """
@@ -144,19 +154,20 @@ class SOMFNN(nn.Module):
         """
         if dataloader.dataset.tensors[0].shape[1] != net.neurons[0]:
             raise ValueError("Input dimension mismatch")
-        if dataloader.dataset.tensors[1].shape[1] != net.neurons[-1]:
-            raise ValueError("Output dimension mismatch")
+        # if dataloader.dataset.tensors[1].ndim == 1:
+        #     if dataloader.dataset.tensors[1].shape[1] != net.neurons[-1]:
+        #         raise ValueError("Output dimension mismatch")
 
         loss_list = [] # Initialize the learning curve list
         if net.training_plot: plt.ion() # Enable interactive mode
         
         for epoch in range(net.num_epochs):
             net.train()
-            for X, Y in dataloader:
-                X, Y = X.to(net.device), Y.to(net.device)
+            for X, target in dataloader:
+                X, target = X.to(net.device), target.to(net.device)
                 net.optimizer.zero_grad()
-                outputs = net(X)
-                loss = net.criterion(outputs, Y)
+                pred = net(X)
+                loss = net.criterion(pred, target)
                 loss.backward()
                 net.optimizer.step()
 
@@ -164,7 +175,7 @@ class SOMFNN(nn.Module):
                 loss_list.append(loss.item())
 
             # Plot the learning curve
-            if training_plot:
+            if net.training_plot:
                 plt.clf() # Clear the current plot
                 plt.plot(loss_list)
                 plt.xlabel('Epoch')
@@ -173,12 +184,14 @@ class SOMFNN(nn.Module):
                 plt.draw()
                 plt.pause(0.00001)
 
+            # acc = get_accuracy(pred, )
             # Print the loss for the current epoch
             print(f"Epoch {epoch+1}/{net.num_epochs}, Loss: {loss.item():.4f}")
 
         if training_plot:    
             plt.ioff() # Disable interactive mode after training is done
             plt.show() # Show the final plot
+
 
     def testnet(net, dataloader: DataLoader) -> None:
         """
