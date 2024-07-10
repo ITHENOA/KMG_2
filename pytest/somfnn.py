@@ -112,7 +112,8 @@ class SOMFNN(nn.Module):
     def set_options(self, num_epochs: int = 10, 
                     learning_rate: float = 0.01, 
                     criterion: str = "MSE", 
-                    optimizer: str = "SGD") -> None:
+                    optimizer: str = "SGD",
+                    training_plot: bool = False):
         """
         Set the training options for the network.
         """
@@ -135,6 +136,7 @@ class SOMFNN(nn.Module):
             raise ValueError(f"Unsupported optimizer type: {optimizer}")
 
         self.num_epochs = num_epochs
+        self.training_plot = training_plot
 
     def trainnet(net, dataloader: DataLoader) -> None:
         """
@@ -145,9 +147,9 @@ class SOMFNN(nn.Module):
         if dataloader.dataset.tensors[1].shape[1] != net.neurons[-1]:
             raise ValueError("Output dimension mismatch")
 
-        # Initialize the learning curve list
-        loss_list = []
-
+        loss_list = [] # Initialize the learning curve list
+        if net.training_plot: plt.ion() # Enable interactive mode
+        
         for epoch in range(net.num_epochs):
             net.train()
             for X, Y in dataloader:
@@ -162,26 +164,33 @@ class SOMFNN(nn.Module):
                 loss_list.append(loss.item())
 
             # Plot the learning curve
-            plt.plot(loss_list)
-            plt.xlabel('Epoch')
-            plt.ylabel('Loss')
-            plt.title('Learning Curve')
-            plt.show()
+            if training_plot:
+                plt.clf() # Clear the current plot
+                plt.plot(loss_list)
+                plt.xlabel('Epoch')
+                plt.ylabel('Loss')
+                plt.title('Learning Curve')
+                plt.draw()
+                plt.pause(0.00001)
 
             # Print the loss for the current epoch
             print(f"Epoch {epoch+1}/{net.num_epochs}, Loss: {loss.item():.4f}")
 
-    def testnet(self, dataloader: DataLoader) -> None:
+        if training_plot:    
+            plt.ioff() # Disable interactive mode after training is done
+            plt.show() # Show the final plot
+
+    def testnet(net, dataloader: DataLoader) -> None:
         """
         Test the network with the given data.
         """
-        self.eval()
+        net.eval()
         total_loss = 0
         with torch.no_grad():
             for x_batch, y_batch in dataloader:
-                x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
-                outputs = self(x_batch)
-                loss = self.criterion(outputs, y_batch)
+                x_batch, y_batch = x_batch.to(net.device), y_batch.to(net.device)
+                outputs = net(x_batch)
+                loss = net.criterion(outputs, y_batch)
                 total_loss += loss.item()
         average_loss = total_loss / len(dataloader)
         print(f"Test Loss: {average_loss:.4f}")

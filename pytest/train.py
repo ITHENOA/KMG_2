@@ -15,7 +15,7 @@ def main():
     torch.autograd.set_detect_anomaly(True)
     # Initialize network
     net = SOMFNN(in_features=4, hidden_features=[3, 2], out_features=1)
-    net.set_options(num_epochs=100, learning_rate=0.01, criterion="CrossEntropy", optimizer="Adam")
+    net.set_options(num_epochs=100, learning_rate=0.01, criterion="MSE", optimizer="Adam")
     net.trainnet(dataloader)
     net.testnet(dataloader)
 
