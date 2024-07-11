@@ -2,7 +2,9 @@ import torch
 from torch import nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, f1_score
+
 
 from layer import Layer
 from utils import get_device
@@ -55,7 +57,7 @@ class SOMFNN(nn.Module):
         # Loop over all layers
         for i in range(self.num_layers):
 
-            # X_detached = X.detach()
+            # X = X.detach()
             with torch.no_grad():
                 # Compute lambda functions for the current layer
                 lambdas = self.layers_info[i](X)
@@ -127,19 +129,25 @@ class SOMFNN(nn.Module):
         """
         if criterion == "MSE":
             self.criterion = nn.MSELoss()
+            self.criterion_name = "MSE"
         elif criterion == "BCE":
             self.criterion = nn.BCELoss()
-        elif criterion == "CrossEntropy":
+            self.criterion_name = "BCE"
+        elif criterion == "CE":
             self.criterion = nn.CrossEntropyLoss()
+            self.criterion_name = "CE"
         else:
             raise ValueError(f"Unsupported criterion type: {criterion}")
 
         if optimizer == "SGD":
             self.optimizer = optim.SGD(self.parameters(), lr=learning_rate)
+            # self.optimizer_name = "SGD"
         elif optimizer == "Adam":
             self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+            # self.optimizer_name = "Adam"
         elif optimizer == "RMSprop":
             self.optimizer = optim.RMSprop(self.parameters(), lr=learning_rate)
+            # self.optimizer_name = "RMSprop"
         else:
             raise ValueError(f"Unsupported optimizer type: {optimizer}")
 
@@ -148,50 +156,109 @@ class SOMFNN(nn.Module):
         self.validation_ratio = validation_ratio
 
 
-    def trainnet(net, dataloader: DataLoader) -> None:
+    def trainnet(net, train_loader: DataLoader, verbose: bool = True, val_loader: DataLoader = None) -> None:
         """
         Train the network with the given data.
         """
-        if dataloader.dataset.tensors[0].shape[1] != net.neurons[0]:
+        if train_loader.dataset.tensors[0].shape[1] != net.neurons[0]:
             raise ValueError("Input dimension mismatch")
         # if dataloader.dataset.tensors[1].ndim == 1:
         #     if dataloader.dataset.tensors[1].shape[1] != net.neurons[-1]:
         #         raise ValueError("Output dimension mismatch")
 
-        loss_list = [] # Initialize the learning curve list
-        if net.training_plot: plt.ion() # Enable interactive mode
+        train_losses, val_losses = [], []
+        train_accuracies, val_accuracies = [], []
+
+        if net.training_plot: 
+            plt.ion() # Enable interactive mode
+            fig, axs = plt.subplots(2, figsize=(10, 8))
+
         
         for epoch in range(net.num_epochs):
+
+            # Training
             net.train()
-            for X, target in dataloader:
-                X, target = X.to(net.device), target.to(net.device)
-                net.optimizer.zero_grad()
-                pred = net(X)
-                loss = net.criterion(pred, target)
+            train_loss = 0.0
+            train_preds, train_labels = [], []
+
+            for X, Y in train_loader:
+                X, Y = X.to(net.device), Y.to(net.device)
+                if net.criterion_name == "CE": Y = Y.long()
+                Yhat = net(X)
+                loss = net.criterion(Yhat, Y)
                 loss.backward()
                 net.optimizer.step()
+                net.optimizer.zero_grad()
 
-                # Append the loss to the learning curve list
-                loss_list.append(loss.item())
+                train_loss += loss.item()
+                if net.criterion_name == "CE":
+                    train_preds.extend(torch.argmax(Yhat, dim=1).cpu().numpy())
+                elif net.criterion_name == "MSE":
+                    train_preds.extend(Yhat.detach().cpu().numpy())
+                train_labels.extend(Y.cpu().numpy())
+
+            train_loss /= len(train_loader)
+            train_accuracy = accuracy_score(train_labels, train_preds)
+            train_f1 = f1_score(train_labels, train_preds, average='weighted')
+
+            # Validation
+            if val_loader:
+                net.eval()
+                val_loss = 0.0
+                val_preds, val_labels = [], []
+
+                with torch.no_grad():
+                    for X, Y in val_loader:
+                        Yhat = net(X)
+                        loss = net.criterion(Yhat, Y)
+
+                        val_loss += loss.item()
+                        if net.criterion_name == "CE":
+                            val_preds.extend(torch.argmax(Yhat, dim=1).cpu().numpy())
+                        elif net.criterion_name == "MSE":
+                            val_preds.extend(Yhat.cpu().numpy())
+                        val_labels.extend(Y.cpu().numpy())
+                
+                val_loss /= len(val_loader)
+                val_accuracy = accuracy_score(val_labels, val_preds)
+                val_f1 = f1_score(val_labels, val_preds, average='weighted')
+            
+            # Append the losses and accuracies
+            train_losses.append(train_loss)
+            train_accuracies.append(train_accuracy)
+            if val_loader:
+                val_losses.append(val_loss)
+                val_accuracies.append(val_accuracy)
 
             # Plot the learning curve
             if net.training_plot:
-                plt.clf() # Clear the current plot
-                plt.plot(loss_list)
-                plt.xlabel('Epoch')
-                plt.ylabel('Loss')
-                plt.title('Learning Curve')
-                plt.draw()
-                plt.pause(0.00001)
+                axs[0].clear()
+                axs[0].plot(range(1, epoch+2), train_losses, label='Train Loss')
+                axs[0].plot(range(1, epoch+2), val_losses, label='Val Loss')
+                axs[0].legend()
+                axs[0].set_title('Loss')
+                
+                axs[1].clear()
+                axs[1].plot(range(1, epoch+2), train_accuracies, label='Train Accuracy')
+                axs[1].plot(range(1, epoch+2), val_accuracies, label='Val Accuracy')
+                axs[1].legend()
+                axs[1].set_title('Accuracy')
+                
+                plt.pause(0.01)
 
-            # acc = get_accuracy(pred, )
             # Print the loss for the current epoch
-            print(f"Epoch {epoch+1}/{net.num_epochs}, Loss: {loss.item():.4f}")
+            if verbose:
+                if val_loader:
+                    print(f"Epoch {epoch+1}/{net.num_epochs}, Loss: {loss.item():.4f}, Train Acc: {train_accuracy:.4f}, Val Acc: {val_accuracy:.4f}")
+                else:
+                    print(f"Epoch {epoch+1}/{net.num_epochs}, Loss: {loss.item():.4f}, Train Acc: {train_accuracy:.4f}")
 
-        if training_plot:    
+        print("Done")
+        # Plot the final learning curve
+        if net.training_plot:    
             plt.ioff() # Disable interactive mode after training is done
             plt.show() # Show the final plot
-
+        
 
     def testnet(net, dataloader: DataLoader) -> None:
         """
@@ -202,6 +269,7 @@ class SOMFNN(nn.Module):
         with torch.no_grad():
             for x_batch, y_batch in dataloader:
                 x_batch, y_batch = x_batch.to(net.device), y_batch.to(net.device)
+                if net.criterion_name == "CE": y_batch = y_batch.long()
                 outputs = net(x_batch)
                 loss = net.criterion(outputs, y_batch)
                 total_loss += loss.item()
