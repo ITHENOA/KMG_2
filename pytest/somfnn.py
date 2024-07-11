@@ -55,21 +55,21 @@ class SOMFNN(nn.Module):
         The forward pass of the network.
         """
         # Loop over all layers
-        for i in range(self.num_layers):
+        for l in range(self.num_layers):
 
             # X = X.detach()
             with torch.no_grad():
                 # Compute lambda functions for the current layer
-                lambdas = self.layers_info[i](X)
+                lambdas = self.layers_info[l](X) # (samples, rules)
 
             # Update the structure of the current pytorch fc layer
-            self.add_neurons(i)
+            self.add_neurons(l)
 
             # Compute the output of the current layer
-            X = torch.sigmoid(self.fc_layers[i](X))
+            X = torch.sigmoid(self.fc_layers[l](X))
 
             # Compute the next input for the network
-            X = self.apply_rule_strength(i, X, lambdas)
+            X = self.apply_rule_strength(l, X, lambdas)
 
         return X
 
