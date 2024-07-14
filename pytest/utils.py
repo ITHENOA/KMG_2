@@ -2,7 +2,7 @@ import torch
 from torch import tensor
 
 k: int = 1
-delta = torch.exp(tensor([-2]))
+delta = torch.exp(tensor([-5]))
 
 
 def get_device() -> str:

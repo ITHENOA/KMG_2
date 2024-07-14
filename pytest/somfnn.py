@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 # import matplotlib.pyplot as plt
@@ -16,12 +17,12 @@ class SOMFNN(nn.Module):
     """
 
     def __init__(
-        self, in_features: int = 3, hidden_features: list = None, out_features: int = 1):
+        self, in_features: int = 3, hidden_features: list = [], out_features: int = 1):
         super(SOMFNN, self).__init__()
 
         # check inputs
-        if hidden_features is None:
-            hidden_features = []
+        # if hidden_features is None:
+        #     hidden_features = []
         if isinstance(in_features, int):
             in_features = [in_features]
         elif not isinstance(in_features, list):
@@ -42,8 +43,11 @@ class SOMFNN(nn.Module):
             self.fc_layers.append(nn.Linear(self.neurons[i], self.neurons[i + 1]))
             self.layers_info.append(Layer(i + 1, self.neurons[i], self.neurons[i + 1]))
 
+        self.fc = nn.Linear(16,10)
+        self.lay = Layer(1,16,10)
+
         # Set options
-        self.criterion = None
+        self.loss_fn = None
         self.optimizer = None
         self.num_epochs = None
         self.device = get_device()
@@ -56,23 +60,67 @@ class SOMFNN(nn.Module):
         """
         # Loop over all layers
         for l in range(self.num_layers):
-
             # X = X.detach()
             with torch.no_grad():
                 # Compute lambda functions for the current layer
                 lambdas = self.layers_info[l](X) # (samples, rules)
-
             # Update the structure of the current pytorch fc layer
             self.add_neurons(l)
-
             # Compute the output of the current layer
-            X = torch.sigmoid(self.fc_layers[l](X))
-
+            X = F.sigmoid(self.fc_layers[l](X))
             # Compute the next input for the network
             X = self.apply_rule_strength(l, X, lambdas)
 
+        # with torch.no_grad():
+        #     lamb = self.lay(X)
+        # self.add()
+        # X = self.fc(X)
+        # X = F.sigmoid(X)
+        # X = self.apply_lamb(10, X, lamb)
+
         return X
 
+    def add(self) -> None:
+        """
+        Update the structure of the fully connected layers.
+        """
+        layer = self.lay
+        # new in_features and out_features
+        in_features = layer.in_features
+        new_out_features = layer.out_features_per_rule * layer.num_rules
+        old_out_features = self.fc.out_features
+        
+        if new_out_features != old_out_features: # requaires new neurons
+            # create new fully connected layer
+            new_fc = nn.Linear(in_features, new_out_features)
+            # copy weights and biases
+            new_fc.weight.data[:old_out_features] = self.fc.weight.data.clone()
+            new_fc.bias.data[:old_out_features] = self.fc.bias.data.clone()
+            # update self.layers[layer_index]
+            self.fc = new_fc
+
+
+    def apply_lamb(self, n_outputs: int, X: torch.Tensor, lambdas: torch.Tensor) -> torch.Tensor:
+        """
+        Compute the lambda function for the given layer.
+        """     
+        # Extract number of outputs and rules from the layer info
+        n_samples, n_rules = lambdas.shape
+        
+        # create lambda-eye matricx -> shape(n_samples, n_outputs, n_outputs * n_rules)
+        lambda_eye = torch.zeros(n_samples, n_outputs, n_outputs * n_rules)
+        for m, sample in enumerate(lambdas):
+            for n, rul in enumerate(sample):
+                lambda_eye[m, :, n*n_outputs:(n+1)*n_outputs] = rul * torch.eye(n_outputs)
+        
+        # Apply the lambda matrices to the input tensor
+        # lambda_eye.shape: (n_samples, n_outputs, n_outputs * n_rules)
+        # X.shape: (n_samples, n_inputs) --unsqueeze--> (n_samples, 1, n_inputs) --mT--> (n_samples, n_inputs, 1)
+        # result.shape: (n_samples, n_outputs, 1) -> (n_samples, n_outputs)
+        # X = torch.einsum('sou,sul->so', lambda_eye, X.unsqueeze(1).mT) # s:sample, o:output, u:rule*output
+        X = torch.matmul(lambda_eye, X.unsqueeze(1).mT).squeeze(2) # another way
+        
+        return X
 
     def add_neurons(self, layer_index: int) -> None:
         """
@@ -81,8 +129,10 @@ class SOMFNN(nn.Module):
         layer = self.layers_info[layer_index]
         # new in_features and out_features
         in_features = layer.in_features
-        new_out_features = layer.num_rules * layer.out_features
+        new_out_features = layer.out_features_per_rule * layer.num_rules
+        # new_out_features = layer.num_rules * layer.out_features
         old_out_features = self.fc_layers[layer_index].out_features
+        # old_out_features = self.fc_layers[layer_index].out_features
         
         if new_out_features != old_out_features: # requaires new neurons
             # create new fully connected layer
@@ -99,7 +149,9 @@ class SOMFNN(nn.Module):
         Compute the lambda function for the given layer.
         """     
         # Extract number of outputs and rules from the layer info
-        n_outputs = self.layers_info[layer_index].out_features
+        n_outputs = self.layers_info[layer_index].out_features_per_rule
+        # n_outputs = self.layers_info[layer_index].out_features
+        # n_outputs = layer_index
         n_samples, n_rules = lambdas.shape
         
         # create lambda-eye matricx -> shape(n_samples, n_outputs, n_outputs * n_rules)
@@ -112,8 +164,8 @@ class SOMFNN(nn.Module):
         # lambda_eye.shape: (n_samples, n_outputs, n_outputs * n_rules)
         # X.shape: (n_samples, n_inputs) --unsqueeze--> (n_samples, 1, n_inputs) --mT--> (n_samples, n_inputs, 1)
         # result.shape: (n_samples, n_outputs, 1) -> (n_samples, n_outputs)
-        X = torch.einsum('sou,sul->so', lambda_eye, X.unsqueeze(1).mT) # s:sample, o:output, u:rule*output
-        # X = torch.matmul(lambda_eye, X.unsqueeze(1).mT).squeeze(2) # another way
+        # X = torch.einsum('sou,sul->so', lambda_eye, X.unsqueeze(1).mT) # s:sample, o:output, u:rule*output
+        X = torch.matmul(lambda_eye, X.unsqueeze(1).mT).squeeze(2) # another way
         
         return X
 
@@ -128,14 +180,14 @@ class SOMFNN(nn.Module):
         Set the training options for the network.
         """
         if criterion == "MSE":
-            self.criterion = nn.MSELoss()
-            self.criterion_name = "MSE"
+            self.loss_fn = nn.MSELoss()
+            self.loss_fn_name = "MSE"
         elif criterion == "BCE":
-            self.criterion = nn.BCELoss()
-            self.criterion_name = "BCE"
+            self.loss_fn = nn.BCELoss()
+            self.loss_fn_name = "BCE"
         elif criterion == "CE":
-            self.criterion = nn.CrossEntropyLoss()
-            self.criterion_name = "CE"
+            self.loss_fn = nn.CrossEntropyLoss()
+            self.loss_fn_name = "CE"
         else:
             raise ValueError(f"Unsupported criterion type: {criterion}")
 
@@ -183,17 +235,21 @@ class SOMFNN(nn.Module):
 
             for X, Y in train_loader:
                 X, Y = X.to(net.device), Y.to(net.device)
-                if net.criterion_name == "CE": Y = Y.long()
+                if net.loss_fn_name == "CE": Y = Y.long()
+
+                # Compute prediction error
                 Yhat = net(X)
-                loss = net.criterion(Yhat, Y)
+                loss = net.loss_fn(Yhat, Y)
+
+                # Backpropagation
                 loss.backward()
                 net.optimizer.step()
                 net.optimizer.zero_grad()
 
                 train_loss += loss.item()
-                if net.criterion_name == "CE":
-                    train_preds.extend(torch.argmax(Yhat, dim=1).cpu().numpy())
-                elif net.criterion_name == "MSE":
+                if net.loss_fn_name == "CE":
+                    train_preds.extend(Yhat.argmax(1).cpu().numpy())
+                elif net.loss_fn_name == "MSE":
                     train_preds.extend(Yhat.detach().cpu().numpy())
                 train_labels.extend(Y.cpu().numpy())
 
@@ -210,12 +266,12 @@ class SOMFNN(nn.Module):
                 with torch.no_grad():
                     for X, Y in val_loader:
                         Yhat = net(X)
-                        loss = net.criterion(Yhat, Y)
+                        loss = net.loss_fn(Yhat, Y)
 
                         val_loss += loss.item()
-                        if net.criterion_name == "CE":
+                        if net.loss_fn_name == "CE":
                             val_preds.extend(torch.argmax(Yhat, dim=1).cpu().numpy())
-                        elif net.criterion_name == "MSE":
+                        elif net.loss_fn_name == "MSE":
                             val_preds.extend(Yhat.cpu().numpy())
                         val_labels.extend(Y.cpu().numpy())
                 
@@ -246,12 +302,16 @@ class SOMFNN(nn.Module):
                 
                 plt.pause(0.01)
 
+            rules = []
+            for i in range(net.num_layers):
+                rules.append(net.layers_info[i].num_rules)
+
             # Print the loss for the current epoch
             if verbose:
                 if val_loader:
                     print(f"Epoch {epoch+1}/{net.num_epochs}, Loss: {loss.item():.4f}, Train Acc: {train_accuracy:.4f}, Val Acc: {val_accuracy:.4f}")
                 else:
-                    print(f"Epoch {epoch+1}/{net.num_epochs}, Loss: {loss.item():.4f}, Train Acc: {train_accuracy:.4f}")
+                    print(f"Epoch {epoch+1}/{net.num_epochs}, Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.4f}, rules: {rules}")
 
         print("Done")
         # Plot the final learning curve
@@ -269,9 +329,9 @@ class SOMFNN(nn.Module):
         with torch.no_grad():
             for x_batch, y_batch in dataloader:
                 x_batch, y_batch = x_batch.to(net.device), y_batch.to(net.device)
-                if net.criterion_name == "CE": y_batch = y_batch.long()
+                if net.loss_fn_name == "CE": y_batch = y_batch.long()
                 outputs = net(x_batch)
-                loss = net.criterion(outputs, y_batch)
+                loss = net.loss_fn(outputs, y_batch)
                 total_loss += loss.item()
         average_loss = total_loss / len(dataloader)
         print(f"Test Loss: {average_loss:.4f}")

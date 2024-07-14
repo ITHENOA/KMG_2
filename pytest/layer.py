@@ -13,7 +13,7 @@ class Layer:
                  out_features: int = None) -> None:
         self.layer_number = layer_number  # layer number
         self.in_features = in_features  # number of inputs
-        self.out_features = out_features  # number of outputs
+        self.out_features_per_rule = out_features  # number of outputs
         self.num_rules = 0  # number of rules
         self.global_mean = torch.zeros(in_features)  # Global Mean, shape([num_inputs])
         self.global_sen_mean = tensor(0.)  # Global Mean of Squared Euclidean Norm
@@ -89,8 +89,7 @@ class Layer:
         Update global parameters using a batch of samples.
         """
         self.num_seen_samples += len(SEN)
-        self.global_mean += (torch.mean(X, dim=0) - self.global_mean) / \
-                            self.num_seen_samples
+        self.global_mean += (torch.mean(X, dim=0) - self.global_mean) / self.num_seen_samples
         self.global_sen_mean += (torch.mean(SEN) - self.global_sen_mean) / self.num_seen_samples
 
     def initialize_rule(self, x: torch.Tensor, sen_x: torch.Tensor) -> None:

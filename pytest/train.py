@@ -30,9 +30,9 @@ def main():
     # val_dataloader = DataLoader(dataset, batch_size=20, shuffle=False)
 
     # Initialize network
-    net = SOMFNN(in_features=X.shape[-1], hidden_features=[16, 16], out_features=10)
-    net.set_options(num_epochs=20, 
-                    learning_rate=0.01, 
+    net = SOMFNN(in_features=X.shape[-1], hidden_features=[], out_features=10)
+    net.set_options(num_epochs=64, 
+                    learning_rate=1, 
                     criterion="CE", # 'MSE', 'BCE', 'CE'
                     optimizer="Adam",  # 'SGD', 'Adam', 'RMSprop'
                     training_plot=False)
