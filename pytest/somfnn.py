@@ -64,8 +64,8 @@ class SOMFNN(nn.Module):
             with torch.no_grad():
                 # Compute lambda functions for the current layer
                 lambdas = self.layers_info[l](X) # (samples, rules)
-            # Update the structure of the current pytorch fc layer
-            self.add_neurons(l)
+                # Update the structure of the current pytorch fc layer
+                self.add_neurons(l)
             # Compute the output of the current layer
             X = F.sigmoid(self.fc_layers[l](X))
             # Compute the next input for the network
@@ -117,8 +117,8 @@ class SOMFNN(nn.Module):
         # lambda_eye.shape: (n_samples, n_outputs, n_outputs * n_rules)
         # X.shape: (n_samples, n_inputs) --unsqueeze--> (n_samples, 1, n_inputs) --mT--> (n_samples, n_inputs, 1)
         # result.shape: (n_samples, n_outputs, 1) -> (n_samples, n_outputs)
-        # X = torch.einsum('sou,sul->so', lambda_eye, X.unsqueeze(1).mT) # s:sample, o:output, u:rule*output
-        X = torch.matmul(lambda_eye, X.unsqueeze(1).mT).squeeze(2) # another way
+        X = torch.einsum('sou,sul->so', lambda_eye, X.unsqueeze(1).mT) # s:sample, o:output, u:rule*output
+        # X = torch.matmul(lambda_eye, X.unsqueeze(1).mT).squeeze(2) # another way
         
         return X
 
@@ -137,9 +137,23 @@ class SOMFNN(nn.Module):
         if new_out_features != old_out_features: # requaires new neurons
             # create new fully connected layer
             new_fc = nn.Linear(in_features, new_out_features)
-            # copy weights and biases
-            new_fc.weight.data[:old_out_features] = self.fc_layers[layer_index].weight.data.clone()
-            new_fc.bias.data[:old_out_features] = self.fc_layers[layer_index].bias.data.clone()
+            
+            # copy previous weights and biases
+            old_weights = self.fc_layers[layer_index].weight.data.clone()
+            old_biases = self.fc_layers[layer_index].bias.data.clone()
+            
+            # randimize weights initialization
+            new_fc.weight.data[:old_out_features] = old_weights
+            new_fc.bias.data[:old_out_features] = old_biases
+            
+            # mean weights initialization
+            if self.init_weights_type == "mean":
+                n_added_rules = int((new_out_features - old_out_features) / layer.out_features_per_rule)
+                init_weights = torch.reshape(old_weights, [layer.out_features_per_rule, old_weights.shape[1], layer.num_rules - n_added_rules]).mean(2)
+                init_biases = torch.reshape(old_biases, [layer.out_features_per_rule, layer.num_rules - n_added_rules]).mean(1)
+                new_fc.weight.data[old_out_features:] = init_weights.repeat(n_added_rules, 1)
+                new_fc.bias.data[old_out_features:] = init_biases.repeat(n_added_rules)
+            
             # update self.layers[layer_index]
             self.fc_layers[layer_index] = new_fc
 
@@ -164,16 +178,17 @@ class SOMFNN(nn.Module):
         # lambda_eye.shape: (n_samples, n_outputs, n_outputs * n_rules)
         # X.shape: (n_samples, n_inputs) --unsqueeze--> (n_samples, 1, n_inputs) --mT--> (n_samples, n_inputs, 1)
         # result.shape: (n_samples, n_outputs, 1) -> (n_samples, n_outputs)
-        # X = torch.einsum('sou,sul->so', lambda_eye, X.unsqueeze(1).mT) # s:sample, o:output, u:rule*output
-        X = torch.matmul(lambda_eye, X.unsqueeze(1).mT).squeeze(2) # another way
+        X1 = torch.einsum('sou,sul->so', lambda_eye, X.unsqueeze(1).mT) # s:sample, o:output, u:rule*output
+        # X2 = torch.matmul(lambda_eye, X.unsqueeze(1).mT).squeeze(2) # another way
         
-        return X
+        return X1
 
 
     def set_options(self, num_epochs: int = 10, 
                     learning_rate: float = 0.01, 
                     criterion: str = "MSE", 
                     optimizer: str = "SGD",
+                    init_weights_type: str = None,
                     training_plot: bool = False,
                     validation_ratio: float = 0):
         """
@@ -206,6 +221,7 @@ class SOMFNN(nn.Module):
         self.num_epochs = num_epochs
         self.training_plot = training_plot
         self.validation_ratio = validation_ratio
+        self.init_weights_type = init_weights_type
 
 
     def trainnet(net, train_loader: DataLoader, verbose: bool = True, val_loader: DataLoader = None) -> None:

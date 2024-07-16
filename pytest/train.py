@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader, TensorDataset
 # import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from torchviz import make_dot
+# from torchviz import make_dot
 
 
 from somfnn import SOMFNN
@@ -23,19 +23,20 @@ def main():
 
     # Create dataset and dataloader
     dataset = TensorDataset(Xtr, Ytr)
-    train_dataloader = DataLoader(dataset, batch_size=20, shuffle=True)
+    train_dataloader = DataLoader(dataset, batch_size=16, shuffle=True)
     dataset = TensorDataset(Xte, Yte)
-    test_dataloader = DataLoader(dataset, batch_size=20, shuffle=False)
+    test_dataloader = DataLoader(dataset, batch_size=16, shuffle=False)
     # dataset = TensorDataset(Xval, Yval)
     # val_dataloader = DataLoader(dataset, batch_size=20, shuffle=False)
 
     # Initialize network
     net = SOMFNN(in_features=X.shape[-1], hidden_features=[], out_features=10)
-    net.set_options(num_epochs=64, 
+    net.set_options(num_epochs=20, 
                     learning_rate=1, 
                     criterion="CE", # 'MSE', 'BCE', 'CE'
                     optimizer="Adam",  # 'SGD', 'Adam', 'RMSprop'
-                    training_plot=False)
+                    training_plot=False,
+                    init_weights_type=None)
     
     net.trainnet(train_dataloader, val_loader=None, verbose=1)
     net.testnet(test_dataloader)

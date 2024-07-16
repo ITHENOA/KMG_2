@@ -71,6 +71,7 @@ class Layer:
             self.global_sen_mean - squared_euclidean_norm(self.global_mean) +
             self.sen_centroids - squared_euclidean_norm(self.centroids)
         ).unsqueeze(0) / 2 
+        stau[stau == 0.] = torch.finfo(torch.float32).eps
 
         # X(sample, features)
         # prototypes(rules, features) --unsqueeze--> (rules, 1, features)
@@ -80,6 +81,8 @@ class Layer:
             densities = (- sen_diff / stau).exp()
         else:
             raise ValueError("Invalid kernel type")
+        
+        densities[densities == 0.] = torch.finfo(torch.float32).eps
 
         return densities # (samples, rules)
 
