@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 # from torchviz import make_dot
+import time
 
 
 from somfnn import SOMFNN
@@ -21,20 +22,21 @@ def main():
     Xtr, Xte, Ytr, Yte = train_test_split(X, Y, test_size=0.2)
     # Xtr, Xval, Ytr, Yval = train_test_split(Xtr, Ytr, test_size=0.1)
 
+    batch_size = 20
     # Create dataset and dataloader
     dataset = TensorDataset(Xtr, Ytr)
-    train_dataloader = DataLoader(dataset, batch_size=16, shuffle=True)
+    train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     dataset = TensorDataset(Xte, Yte)
-    test_dataloader = DataLoader(dataset, batch_size=16, shuffle=False)
+    test_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     # dataset = TensorDataset(Xval, Yval)
-    # val_dataloader = DataLoader(dataset, batch_size=20, shuffle=False)
+    # val_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     # Initialize network
     net = SOMFNN(in_features=X.shape[-1], hidden_features=[], out_features=10)
     net.set_options(num_epochs=20, 
-                    learning_rate=1, 
+                    learning_rate=0.01, 
                     criterion="CE", # 'MSE', 'BCE', 'CE'
-                    optimizer="Adam",  # 'SGD', 'Adam', 'RMSprop'
+                    optimizer="SGD",  # 'SGD', 'Adam', 'RMSprop'
                     training_plot=False,
                     init_weights_type=None)
     

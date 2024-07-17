@@ -5,6 +5,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 # import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, f1_score
+from time import time
 
 
 from layer import Layer
@@ -43,8 +44,8 @@ class SOMFNN(nn.Module):
             self.fc_layers.append(nn.Linear(self.neurons[i], self.neurons[i + 1]))
             self.layers_info.append(Layer(i + 1, self.neurons[i], self.neurons[i + 1]))
 
-        self.fc = nn.Linear(16,10)
-        self.lay = Layer(1,16,10)
+        # self.fc = nn.Linear(16,10)
+        # self.lay = Layer(1,16,10)
 
         # Set options
         self.loss_fn = None
@@ -57,6 +58,8 @@ class SOMFNN(nn.Module):
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         """
         The forward pass of the network.
+
+        X.shape = (Batch, in_features)
         """
         # Loop over all layers
         for l in range(self.num_layers):
@@ -67,9 +70,10 @@ class SOMFNN(nn.Module):
                 # Update the structure of the current pytorch fc layer
                 self.add_neurons(l)
             # Compute the output of the current layer
-            X = F.sigmoid(self.fc_layers[l](X))
+            X = self.fc_layers[l](X) # X.shape = (Batch, Rule * out_features)
+            X = F.sigmoid(X)
             # Compute the next input for the network
-            X = self.apply_rule_strength(l, X, lambdas)
+            X = self.apply_rule_strength(l, X, lambdas) # X.shape = (Batch, out_features)
 
         # with torch.no_grad():
         #     lamb = self.lay(X)
@@ -161,6 +165,11 @@ class SOMFNN(nn.Module):
     def apply_rule_strength(self, layer_index: int, X: torch.Tensor, lambdas: torch.Tensor) -> torch.Tensor:
         """
         Compute the lambda function for the given layer.
+
+        X.shape = (Batch, Rule * out_features)
+        lambdas.shape = (Batch, Rule)
+
+        return.shape = (Batch, out_features)
         """     
         # Extract number of outputs and rules from the layer info
         n_outputs = self.layers_info[layer_index].out_features_per_rule
@@ -168,20 +177,36 @@ class SOMFNN(nn.Module):
         # n_outputs = layer_index
         n_samples, n_rules = lambdas.shape
         
-        # create lambda-eye matricx -> shape(n_samples, n_outputs, n_outputs * n_rules)
-        lambda_eye = torch.zeros(n_samples, n_outputs, n_outputs * n_rules)
-        for m, sample in enumerate(lambdas):
-            for n, rul in enumerate(sample):
-                lambda_eye[m, :, n*n_outputs:(n+1)*n_outputs] = rul * torch.eye(n_outputs)
-        
-        # Apply the lambda matrices to the input tensor
-        # lambda_eye.shape: (n_samples, n_outputs, n_outputs * n_rules)
-        # X.shape: (n_samples, n_inputs) --unsqueeze--> (n_samples, 1, n_inputs) --mT--> (n_samples, n_inputs, 1)
-        # result.shape: (n_samples, n_outputs, 1) -> (n_samples, n_outputs)
-        X1 = torch.einsum('sou,sul->so', lambda_eye, X.unsqueeze(1).mT) # s:sample, o:output, u:rule*output
+        ### method 1 ###
+        # # create lambda-eye matricx -> shape(n_samples, n_outputs, n_outputs * n_rules)
+        # lambda_eye = torch.zeros(n_samples, n_outputs, n_outputs * n_rules)
+        # for m, sample in enumerate(lambdas):
+        #     for n, rul in enumerate(sample):
+        #         lambda_eye[m, :, n*n_outputs:(n+1)*n_outputs] = rul * torch.eye(n_outputs)
+        # # Apply the lambda matrices to the input tensor
+        # # lambda_eye.shape: (n_samples, n_outputs, n_outputs * n_rules)
+        # # X.shape: (n_samples, n_inputs) --unsqueeze--> (n_samples, 1, n_inputs) --mT--> (n_samples, n_inputs, 1)
+        # # result.shape: (n_samples, n_outputs, 1) -> (n_samples, n_outputs)
+        # X1 = torch.einsum('sou,sul->so', lambda_eye, X.unsqueeze(1).mT) # s:sample, o:output, u:rule*output
+
+        ### method 2 ###
+        # # create lambda-eye matricx -> shape(n_samples, n_outputs, n_outputs * n_rules)
+        # lambda_eye = torch.zeros(n_samples, n_outputs, n_outputs * n_rules)
+        # for m, sample in enumerate(lambdas):
+        #     for n, rul in enumerate(sample):
+        #         lambda_eye[m, :, n*n_outputs:(n+1)*n_outputs] = rul * torch.eye(n_outputs)
+        # # Apply the lambda matrices to the input tensor
+        # # lambda_eye.shape: (n_samples, n_outputs, n_outputs * n_rules)
+        # # X.shape: (n_samples, n_inputs) --unsqueeze--> (n_samples, 1, n_inputs) --mT--> (n_samples, n_inputs, 1)
+        # # result.shape: (n_samples, n_outputs, 1) -> (n_samples, n_outputs)
         # X2 = torch.matmul(lambda_eye, X.unsqueeze(1).mT).squeeze(2) # another way
-        
-        return X1
+
+        ### method 3 ###
+        X3 = torch.zeros([n_samples, n_outputs])
+        for i, (lamb_B, X_B) in enumerate(zip(lambdas, X)):
+            X3[i,:] = (X_B.reshape((n_rules, n_outputs)).t() * lamb_B.unsqueeze(0)).sum(1)
+
+        return X3
 
 
     def set_options(self, num_epochs: int = 10, 
@@ -327,7 +352,7 @@ class SOMFNN(nn.Module):
                 if val_loader:
                     print(f"Epoch {epoch+1}/{net.num_epochs}, Loss: {loss.item():.4f}, Train Acc: {train_accuracy:.4f}, Val Acc: {val_accuracy:.4f}")
                 else:
-                    print(f"Epoch {epoch+1}/{net.num_epochs}, Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.4f}, rules: {rules}")
+                    print(f"Epoch [{epoch+1}/{net.num_epochs}], Loss: [{train_loss:.2f}], Train Acc: [{train_accuracy*100:.2f}], rules: {rules}")
 
         print("Done")
         # Plot the final learning curve

@@ -65,6 +65,7 @@ class Layer:
         value, index = torch.max(densities, dim=1) # max over rules
         return value[0] < delta, index[0].item()
 
+
     def local_density(self, X: torch.Tensor, kernel: str = "RBF") -> torch.Tensor:
         # stau.shape: (rules) --unsqueeze--> (1, rules)
         stau = abs(
@@ -86,14 +87,18 @@ class Layer:
 
         return densities # (samples, rules)
 
-    def update_global_parameters(self, X: torch.Tensor,
-                                 SEN: torch.Tensor) -> None:
+    def update_global_parameters(self, X: torch.Tensor, SEN: torch.Tensor):
         """
         Update global parameters using a batch of samples.
         """
+        # for x, sen in zip(X, SEN):
+        #     self.num_seen_samples += 1
+        #     self.global_mean += (x - self.global_mean) / self.num_seen_samples
+        #     self.global_sen_mean += (sen - self.global_sen_mean) / self.num_seen_samples
+
         self.num_seen_samples += len(SEN)
-        self.global_mean += (torch.mean(X, dim=0) - self.global_mean) / self.num_seen_samples
-        self.global_sen_mean += (torch.mean(SEN) - self.global_sen_mean) / self.num_seen_samples
+        self.global_mean = ((self.num_seen_samples - 1) * self.global_mean + X.sum(0)) / self.num_seen_samples
+        self.global_sen_mean = ((self.num_seen_samples - 1) * self.global_sen_mean + SEN.sum()) / self.num_seen_samples
 
     def initialize_rule(self, x: torch.Tensor, sen_x: torch.Tensor) -> None:
         """
