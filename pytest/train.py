@@ -32,22 +32,28 @@ def main():
     # val_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     # Initialize network
-    net = SOMFNN(in_features=X.shape[-1], hidden_features=[], out_features=10)
-    net.set_options(num_epochs=20, 
+    model = SOMFNN(in_features=X.shape[-1], hidden_features=[], out_features=10)
+    model.set_options(num_epochs=1, 
                     learning_rate=0.01, 
                     criterion="CE", # 'MSE', 'BCE', 'CE'
                     optimizer="SGD",  # 'SGD', 'Adam', 'RMSprop'
                     training_plot=False,
                     init_weights_type=None)
     
-    net.trainnet(train_dataloader, val_loader=None, verbose=1)
-    net.testnet(test_dataloader)
+    model.trainnet(train_dataloader, val_loader=None, verbose=1)
+    model.testnet(test_dataloader)
 
-    # Yh = net(X)
-    # make_dot(Yh, params=dict(list(net.named_parameters()))).render("rnn_torchviz", format="png")
-    # graph = make_dot(Yh.mean(), params=dict(net.named_parameters()), show_attrs=True, show_saved=True)
+    ## export onnx
+    # torch.onnx.export(model, Xte, "model.onnx")
+    torch.onnx.dynamo_export(model, Xte).save("model.onnx")
+
+    ## export torchviz
+    # make_dot(net(X), params=dict(list(net.named_parameters()))).render("rnn_torchviz", format="png")
+    # graph = make_dot(net(X).mean(), params=dict(net.named_parameters()), show_attrs=True, show_saved=True)
     # graph.render("backward_graph", format="png")
     # graph
+
+    # netron.app
 
 
 
