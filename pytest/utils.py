@@ -1,8 +1,8 @@
 import torch
 from torch import tensor
 
-k: int = 1
-delta = torch.exp(tensor([-5]))
+# k: int = 1
+similarity_thresh = torch.exp(tensor([-3]))
 
 
 def get_device() -> str:

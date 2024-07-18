@@ -21,3 +21,9 @@ def load_dataset(name):
             X = cat((X,x), dim=0)
             Y = cat((Y, tensor(data[t+1]).unsqueeze(0)))
         return X, Y
+    
+    if name == "muscle_sim_8cls":
+        data = loadmat("pytest\data\matlab.mat")["ans"]
+        X = data[:,:-1]
+        Y = data[:,-1]
+        return tensor(X), tensor(Y)

@@ -1,20 +1,19 @@
 import torch
 from torch import tensor, cat
 
-from utils import squared_euclidean_norm, get_device, delta
+from utils import squared_euclidean_norm, get_device, similarity_thresh
 
 
 class Layer:
     """
     A class representing a layer in the neural network.
     """
-
     def __init__(self, layer_number: int = None, in_features: int = None,
                  out_features: int = None) -> None:
         self.layer_number = layer_number  # layer number
         self.in_features = in_features  # number of inputs
         self.out_features_per_rule = out_features  # number of outputs
-        self.num_rules = 0  # number of rules
+        self.n_rules = 0  # number of rules
         self.global_mean = torch.zeros(in_features)  # Global Mean, shape([num_inputs])
         self.global_sen_mean = tensor(0.)  # Global Mean of Squared Euclidean Norm
         self.prototypes = torch.empty(0)  # (rules, features)
@@ -25,31 +24,35 @@ class Layer:
         # self.device = get_device()
         # self.to(self.device)
 
+
     def __call__(self, X: torch.Tensor) -> torch.Tensor:
         SEN = squared_euclidean_norm(X)
         self.update_global_parameters(X, SEN)
 
-        sample_rules = []  # clusters NO of each sample
+        # sample_rules = []  # clusters NO of each sample
 
         for x, sen in zip(X, SEN):
             # sen becomes 1D matrix
             sen = sen.unsqueeze(0)
             # x becomes 2D matrix
             x = x.unsqueeze(0)
-            if self.num_rules == 0:
+            if self.n_rules == 0:
                 self.initialize_rule(x, sen)
                 # update "rule index of each sample" vector
-                sample_rules.append(0)
+                # sample_rules.append(0)
             else:
                 logit, rule_index = self.rule_condition(x)
                 if logit:
+                    # The sample was rejected by all rules
                     self.initialize_rule(x, sen)
-                    sample_rules.append(self.num_rules - 1)
-                else:
+                    # sample_rules.append(self.n_rules - 1)
+                else:  
+                    # The sample was accepted by one of the rules
                     self.update_rule(rule_index, x, sen)
-                    sample_rules.append(rule_index)
+                    # sample_rules.append(rule_index)
 
         return self.compute_lambdas(X)  # (samples, rules)
+
 
     def compute_lambdas(self, X: torch.Tensor) -> torch.Tensor:
         """
@@ -60,10 +63,11 @@ class Layer:
         lambdas = densities / density_sum # (samples, rule)
         return lambdas
 
+
     def rule_condition(self, x: torch.Tensor) -> tuple:
         densities = self.local_density(x) # (samples, rules)
         value, index = torch.max(densities, dim=1) # max over rules
-        return value[0] < delta, index[0].item()
+        return value[0] < similarity_thresh, index[0].item()
 
 
     def local_density(self, X: torch.Tensor, kernel: str = "RBF") -> torch.Tensor:
@@ -87,28 +91,31 @@ class Layer:
 
         return densities # (samples, rules)
 
+
     def update_global_parameters(self, X: torch.Tensor, SEN: torch.Tensor):
         """
         Update global parameters using a batch of samples.
         """
-        # for x, sen in zip(X, SEN):
-        #     self.num_seen_samples += 1
-        #     self.global_mean += (x - self.global_mean) / self.num_seen_samples
-        #     self.global_sen_mean += (sen - self.global_sen_mean) / self.num_seen_samples
+        for x, sen in zip(X, SEN):
+            self.num_seen_samples += 1
+            self.global_mean += (x - self.global_mean) / self.num_seen_samples
+            self.global_sen_mean += (sen - self.global_sen_mean) / self.num_seen_samples
 
-        self.num_seen_samples += len(SEN)
-        self.global_mean = ((self.num_seen_samples - 1) * self.global_mean + X.sum(0)) / self.num_seen_samples
-        self.global_sen_mean = ((self.num_seen_samples - 1) * self.global_sen_mean + SEN.sum()) / self.num_seen_samples
+        # self.num_seen_samples += len(SEN)
+        # self.global_mean = ((self.num_seen_samples - 1) * self.global_mean + X.sum(0)) / self.num_seen_samples
+        # self.global_sen_mean = ((self.num_seen_samples - 1) * self.global_sen_mean + SEN.sum()) / self.num_seen_samples
+
 
     def initialize_rule(self, x: torch.Tensor, sen_x: torch.Tensor) -> None:
         """
         Initialize a new rule.
         """
-        self.num_rules += 1
+        self.n_rules += 1
         self.prototypes = cat((self.prototypes, x), dim=0) # prototypes.ndim == x.ndim == 2
         self.centroids = cat((self.centroids, x)) # centroids.ndim == x.ndim == 2
         self.sen_centroids = cat((self.sen_centroids, sen_x), dim=0) 
         self.support.append(1)
+
 
     def update_rule(self, rule_index: int, x: torch.Tensor,
                     sen_x: torch.Tensor) -> None:
@@ -118,9 +125,10 @@ class Layer:
         if sen_x.ndim == 1: sen_x = sen_x.squeeze(0)
         
         self.support[rule_index] += 1
-        self.centroids[rule_index] += (
-            x.squeeze(0) - self.centroids[rule_index]
-        ) / self.support[rule_index]
-        self.sen_centroids[rule_index] += (
-            sen_x - self.sen_centroids[rule_index]
-        ) / self.support[rule_index]
+        self.centroids[rule_index] += (x.squeeze(0) - self.centroids[rule_index]) / self.support[rule_index]
+        self.sen_centroids[rule_index] += (sen_x - self.sen_centroids[rule_index]) / self.support[rule_index]
+        
+
+    def add_to_mean(mean_var, new_vars):
+        if len(new_vars) == 1:
+            mean_var += (new_vars - mean_var) / len(mean_var + 1)
