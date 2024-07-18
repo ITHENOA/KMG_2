@@ -22,7 +22,7 @@ def main():
     Xtr, Xte, Ytr, Yte = train_test_split(X, Y, test_size=0.2)
     # Xtr, Xval, Ytr, Yval = train_test_split(Xtr, Ytr, test_size=0.1)
 
-    batch_size = 20
+    batch_size = 128
     # Create dataset and dataloader
     dataset = TensorDataset(Xtr, Ytr)
     train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -33,8 +33,8 @@ def main():
 
     # Initialize network
     model = SOMFNN(in_features=X.shape[-1], hidden_features=[], out_features=10)
-    model.set_options(num_epochs=1, 
-                    learning_rate=0.01, 
+    model.set_options(num_epochs=20, 
+                    learning_rate=.1, 
                     criterion="CE", # 'MSE', 'BCE', 'CE'
                     optimizer="SGD",  # 'SGD', 'Adam', 'RMSprop'
                     training_plot=False,
@@ -45,9 +45,9 @@ def main():
 
     ## export onnx
     # torch.onnx.export(model, Xte, "model.onnx")
-    torch.onnx.dynamo_export(model, Xte).save("model.onnx")
+    # torch.onnx.dynamo_export(model, Xte).save("model.onnx")
 
-    ## export torchviz
+    ## export torchviz graph
     # make_dot(net(X), params=dict(list(net.named_parameters()))).render("rnn_torchviz", format="png")
     # graph = make_dot(net(X).mean(), params=dict(net.named_parameters()), show_attrs=True, show_saved=True)
     # graph.render("backward_graph", format="png")

@@ -1,7 +1,7 @@
 import torch
 from torch import tensor, cat
 
-from utils import squared_euclidean_norm, get_device, similarity_thresh
+from utils import squared_euclidean_norm, get_device, similarity_thresh, add_to_mean
 
 
 class Layer:
@@ -105,6 +105,10 @@ class Layer:
         # self.global_mean = ((self.num_seen_samples - 1) * self.global_mean + X.sum(0)) / self.num_seen_samples
         # self.global_sen_mean = ((self.num_seen_samples - 1) * self.global_sen_mean + SEN.sum()) / self.num_seen_samples
 
+        # self.global_mean = add_to_mean(self.global_mean, self.num_seen_samples, X)
+        # self.global_sen_mean = add_to_mean(self.global_sen_mean, self.num_seen_samples, SEN)
+        # self.num_seen_samples += len(SEN)
+
 
     def initialize_rule(self, x: torch.Tensor, sen_x: torch.Tensor) -> None:
         """
@@ -127,8 +131,7 @@ class Layer:
         self.support[rule_index] += 1
         self.centroids[rule_index] += (x.squeeze(0) - self.centroids[rule_index]) / self.support[rule_index]
         self.sen_centroids[rule_index] += (sen_x - self.sen_centroids[rule_index]) / self.support[rule_index]
-        
 
-    def add_to_mean(mean_var, new_vars):
-        if len(new_vars) == 1:
-            mean_var += (new_vars - mean_var) / len(mean_var + 1)
+        # self.centroids[rule_index] = add_to_mean(self.centroids[rule_index], self.support[rule_index], x)
+        # self.sen_centroids[rule_index] = add_to_mean(self.sen_centroids[rule_index], self.support[rule_index], sen_x)
+        # self.support[rule_index] += 1
