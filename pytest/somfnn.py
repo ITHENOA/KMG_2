@@ -44,8 +44,8 @@ class SOMFNN(nn.Module):
             self.fc_layers.append(nn.Linear(self.neurons[i], self.neurons[i + 1]))
             self.layers_info.append(Layer(i + 1, self.neurons[i], self.neurons[i + 1]))
 
-        # self.fc = nn.Linear(16,10)
-        # self.lay = Layer(1,16,10)
+        self.fc = nn.Linear(16,10)
+        self.lay = Layer(1,16,10)
 
         # Set options
         self.loss_fn = None
@@ -54,7 +54,7 @@ class SOMFNN(nn.Module):
         self.device = get_device()
         self.to(self.device)
 
-
+    # -----------------------------------------------------------------------
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         """
         The forward pass of the network.
@@ -63,12 +63,14 @@ class SOMFNN(nn.Module):
         """
         # Loop over all layers
         for l in range(self.num_layers):
-            # X = X.detach()
+            Xd = X.detach()
             with torch.no_grad():
+                self.eval()
                 # Compute lambda functions for the current layer
-                lambdas = self.layers_info[l](X) # (samples, rules)
+                lambdas = self.layers_info[l](Xd) # (samples, rules)
                 # Update the structure of the current pytorch fc layer
                 self.add_neurons(l)
+            self.train()
             # Compute the output of the current layer
             X = self.fc_layers[l](X) # X.shape = (Batch, Rule * out_features)
             X = F.sigmoid(X)
@@ -77,55 +79,14 @@ class SOMFNN(nn.Module):
 
         # with torch.no_grad():
         #     lamb = self.lay(X)
-        # self.add()
+        #     self.add()
         # X = self.fc(X)
         # X = F.sigmoid(X)
         # X = self.apply_lamb(10, X, lamb)
 
         return X
 
-    def add(self) -> None:
-        """
-        Update the structure of the fully connected layers.
-        """
-        layer = self.lay
-        # new in_features and out_features
-        in_features = layer.in_features
-        new_out_features = layer.out_features_per_rule * layer.n_rules
-        old_out_features = self.fc.out_features
-        
-        if new_out_features != old_out_features: # requaires new neurons
-            # create new fully connected layer
-            new_fc = nn.Linear(in_features, new_out_features)
-            # copy weights and biases
-            new_fc.weight.data[:old_out_features] = self.fc.weight.data.clone()
-            new_fc.bias.data[:old_out_features] = self.fc.bias.data.clone()
-            # update self.layers[layer_index]
-            self.fc = new_fc
-
-
-    def apply_lamb(self, n_outputs: int, X: torch.Tensor, lambdas: torch.Tensor) -> torch.Tensor:
-        """
-        Compute the lambda function for the given layer.
-        """     
-        # Extract number of outputs and rules from the layer info
-        n_samples, n_rules = lambdas.shape
-        
-        # create lambda-eye matricx -> shape(n_samples, n_outputs, n_outputs * n_rules)
-        lambda_eye = torch.zeros(n_samples, n_outputs, n_outputs * n_rules)
-        for m, sample in enumerate(lambdas):
-            for n, rul in enumerate(sample):
-                lambda_eye[m, :, n*n_outputs:(n+1)*n_outputs] = rul * torch.eye(n_outputs)
-        
-        # Apply the lambda matrices to the input tensor
-        # lambda_eye.shape: (n_samples, n_outputs, n_outputs * n_rules)
-        # X.shape: (n_samples, n_inputs) --unsqueeze--> (n_samples, 1, n_inputs) --mT--> (n_samples, n_inputs, 1)
-        # result.shape: (n_samples, n_outputs, 1) -> (n_samples, n_outputs)
-        X = torch.einsum('sou,sul->so', lambda_eye, X.unsqueeze(1).mT) # s:sample, o:output, u:rule*output
-        # X = torch.matmul(lambda_eye, X.unsqueeze(1).mT).squeeze(2) # another way
-        
-        return X
-
+    # -----------------------------------------------------------------------
     def add_neurons(self, layer_index: int) -> None:
         """
         Update the structure of the fully connected layers.
@@ -159,17 +120,13 @@ class SOMFNN(nn.Module):
                 new_fc.bias.data[old_out_features:] = init_biases.repeat(n_added_rules)
 
             if self.init_weights_type == "in_paper":
-                pass
-                n_added_rules = int((new_out_features - old_out_features) / layer.out_features_per_rule)
-                # init_weights = 
-                # init_biases = 
-                new_fc.weight.data[old_out_features:] = init_weights.repeat(n_added_rules, 1)
-                new_fc.bias.data[old_out_features:] = init_biases.repeat(n_added_rules)
-            
+                new_fc.weight.data[old_out_features:] = torch.randint(0, 2, [new_out_features - old_out_features, in_features]) / (in_features+1)
+                new_fc.bias.data[old_out_features:] = torch.randint(0, 2, [new_out_features - old_out_features]) / (in_features+1)
+
             # update self.layers[layer_index]
             self.fc_layers[layer_index] = new_fc
 
-
+    # -----------------------------------------------------------------------
     def apply_rule_strength(self, layer_index: int, X: torch.Tensor, lambdas: torch.Tensor) -> torch.Tensor:
         """
         Compute the lambda function for the given layer.
@@ -180,8 +137,8 @@ class SOMFNN(nn.Module):
         return.shape = (batch, out_features)
         """     
         # Extract number of outputs and rules from the layer info
-        n_outputs = self.layers_info[layer_index].out_features_per_rule
-        # n_outputs = self.layers_info[layer_index].out_features
+        # n_outputs = self.layers_info[layer_index].out_features_per_rule
+        n_outputs = self.neurons[layer_index + 1]
         # n_outputs = layer_index
         n_samples, n_rules = lambdas.shape
         
@@ -234,12 +191,16 @@ class SOMFNN(nn.Module):
 
         ### method 5 ### [2s for rep=1000, batch=128]
         # l:1, R:n_rule, O:n_out, S:n_sample
+        # return torch.einsum("lRS,ROS->lOS",
+        #     lambdas.mT.reshape([1, n_rules, n_samples]),
+        #     X.mT.reshape([n_rules, n_outputs, n_samples])
+        # ).mT.reshape(n_samples, n_outputs)
         return torch.einsum("lRS,ROS->lOS",
-            lambdas.mT.reshape([1, n_rules, n_samples]),
-            X.mT.reshape([n_rules, n_outputs, n_samples])
-        ).mT.reshape(n_samples, n_outputs)
+            lambdas.transpose(1,0).reshape([1, n_rules, n_samples]),
+            X.transpose(1,0).reshape([n_rules, n_outputs, n_samples])
+        ).transpose(1,0).reshape(n_samples, n_outputs)
 
-
+    # -----------------------------------------------------------------------
     def set_options(self, num_epochs: int = 10, 
                     learning_rate: float = 0.01, 
                     criterion: str = "MSE", 
@@ -279,7 +240,7 @@ class SOMFNN(nn.Module):
         self.validation_ratio = validation_ratio
         self.init_weights_type = init_weights_type
 
-
+    # -----------------------------------------------------------------------
     def trainnet(net, train_loader: DataLoader, verbose: bool = True, val_loader: DataLoader = None) -> None:
         """
         Train the network with the given data.
@@ -317,6 +278,8 @@ class SOMFNN(nn.Module):
                 loss.backward()
                 net.optimizer.step()
                 net.optimizer.zero_grad()
+                
+                # print(Yhat.argmax(1) == Y)
 
                 train_loss += loss.item()
                 if net.loss_fn_name == "CE":
@@ -375,17 +338,15 @@ class SOMFNN(nn.Module):
                 plt.pause(0.01)
 
             rules = []
-            n_samp = []
             for i in range(net.num_layers):
                 rules.append(net.layers_info[i].n_rules)
-                n_samp.append(net.layers_info[i].num_seen_samples)
 
             # Print the loss for the current epoch
             if verbose:
                 if val_loader:
                     print(f"Epoch {epoch+1}/{net.num_epochs}, Loss: {loss.item():.4f}, Train Acc: {train_accuracy:.4f}, Val Acc: {val_accuracy:.4f}")
                 else:
-                    print(f"Epoch [{epoch+1}/{net.num_epochs}], Loss: [{train_loss:.2f}], Train Acc: [{train_accuracy*100:.2f}], rules: {rules},{n_samp}")
+                    print(f"Epoch [{epoch+1}/{net.num_epochs}], Loss: [{train_loss:.2f}], Train Acc: [{train_accuracy*100:.2f}], rules: {rules}")
 
         print("Done")
         # Plot the final learning curve
@@ -393,7 +354,7 @@ class SOMFNN(nn.Module):
             plt.ioff() # Disable interactive mode after training is done
             plt.show() # Show the final plot
         
-
+    # -----------------------------------------------------------------------
     def testnet(net, dataloader: DataLoader) -> None:
         """
         Test the network with the given data.

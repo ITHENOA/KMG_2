@@ -6,12 +6,12 @@ from torch import tensor, cat, empty
 def load_dataset(name):
 
     if name == "pen":
-        data = pd.read_excel("pytest\data\pen_class10.xlsx")
+        data = pd.read_excel("pytest\\data\\pen_class10.xlsx")
         data = data.to_numpy()
         return data[:, :-1], data[:, -1]
     
     if name == "sp500":
-        data = pd.read_excel("pytest\data\SP500_reg.xlsx")
+        data = pd.read_excel("pytest\\data\\SP500_reg.xlsx")
         data = data.to_numpy()
         data = data[:,5] # close price
         X = tensor([])
@@ -23,7 +23,7 @@ def load_dataset(name):
         return X, Y
     
     if name == "muscle_sim_8cls":
-        data = loadmat("pytest\data\matlab.mat")["ans"]
+        data = loadmat("pytest\\data\\matlab.mat")["ans"]
         X = data[:,:-1]
         Y = data[:,-1]
         return tensor(X), tensor(Y)

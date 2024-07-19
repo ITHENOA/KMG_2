@@ -22,7 +22,7 @@ def main():
     Xtr, Xte, Ytr, Yte = train_test_split(X, Y, test_size=0.2)
     # Xtr, Xval, Ytr, Yval = train_test_split(Xtr, Ytr, test_size=0.1)
 
-    batch_size = 128
+    batch_size = 20
     # Create dataset and dataloader
     dataset = TensorDataset(Xtr, Ytr)
     train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -33,19 +33,27 @@ def main():
 
     # Initialize network
     model = SOMFNN(in_features=X.shape[-1], hidden_features=[], out_features=10)
-    model.set_options(num_epochs=20, 
-                    learning_rate=.1, 
-                    criterion="CE", # 'MSE', 'BCE', 'CE'
-                    optimizer="SGD",  # 'SGD', 'Adam', 'RMSprop'
-                    training_plot=False,
-                    init_weights_type=None)
+    model.set_options(
+        num_epochs=1, 
+        learning_rate=1, 
+        criterion="CE", # MSE | BCE | CE
+        optimizer="SGD",  # SGD | Adam | RMSprop
+        training_plot=False,
+        init_weights_type=None # None(pytorch default) | in_paper | mean
+    )
     
     model.trainnet(train_dataloader, val_loader=None, verbose=1)
     model.testnet(test_dataloader)
 
     ## export onnx
-    # torch.onnx.export(model, Xte, "model.onnx")
+    # torch.onnx.export(model, Xte, "pytest\\model.onnx")
     # torch.onnx.dynamo_export(model, Xte).save("model.onnx")
+    # torch.onnx.export(model, Xte, "model.onnx", opset_version=11,
+    #               custom_opsets={"CustomOp": 1}, 
+    #               export_params=True)
+    traced_model = torch.jit.trace(model, Xte)
+    torch.onnx.export(traced_model, Xte, "simple_model.onnx", opset_version=11, verbose=True)
+
 
     ## export torchviz graph
     # make_dot(net(X), params=dict(list(net.named_parameters()))).render("rnn_torchviz", format="png")
