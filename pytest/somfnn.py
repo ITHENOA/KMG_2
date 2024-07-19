@@ -38,14 +38,18 @@ class SOMFNN(nn.Module):
         self.num_layers = len(self.neurons) - 1
         
         # Create the fully connected layers and layer information objects
-        self.fc_layers = nn.ModuleList()
-        self.layers_info = []
-        for i in range(self.num_layers):
-            self.fc_layers.append(nn.Linear(self.neurons[i], self.neurons[i + 1]))
-            self.layers_info.append(Layer(i + 1, self.neurons[i], self.neurons[i + 1]))
+        # self.fc_layers = nn.ModuleList()
+        # self.layers_info = []
+        # for i in range(self.num_layers):
+        #     self.fc_layers.append(nn.Linear(self.neurons[i], self.neurons[i + 1]))
+        #     self.layers_info.append(Layer(i + 1, self.neurons[i], self.neurons[i + 1]))
 
-        self.fc = nn.Linear(16,10)
-        self.lay = Layer(1,16,10)
+        self.fc1 = nn.Linear(5,10)
+        self.solay1 = Layer(1,5,10)
+        self.fc2 = nn.Linear(10,10)
+        self.solay2 = Layer(1,10,10)
+        self.fc3 = nn.Linear(10,1)
+        self.solay3 = Layer(1,10,1)
 
         # Set options
         self.loss_fn = None
@@ -62,30 +66,59 @@ class SOMFNN(nn.Module):
         X.shape = (Batch, in_features)
         """
         # Loop over all layers
-        for l in range(self.num_layers):
-            Xd = X.detach()
-            with torch.no_grad():
-                self.eval()
-                # Compute lambda functions for the current layer
-                lambdas = self.layers_info[l](Xd) # (samples, rules)
-                # Update the structure of the current pytorch fc layer
-                self.add_neurons(l)
-            self.train()
-            # Compute the output of the current layer
-            X = self.fc_layers[l](X) # X.shape = (Batch, Rule * out_features)
-            X = F.sigmoid(X)
-            # Compute the next input for the network
-            X = self.apply_rule_strength(l, X, lambdas) # X.shape = (Batch, out_features)
+        # for l in range(self.num_layers):
+        #     with torch.no_grad():
+        #         # Compute lambda functions for the current layer
+        #         lambdas = self.layers_info[l](X) # (samples, rules)
+        #         # Update the structure of the current pytorch fc layer
+        #         self.add_neurons(l)
+        #     # Compute the output of the current layer
+        #     X = self.fc_layers[l](X) # X.shape = (Batch, Rule * out_features)
+        #     X = F.sigmoid(X)
+        #     # Compute the next input for the network
+        #     X = self.apply_rule_strength(l, X, lambdas) # X.shape = (Batch, out_features)
 
-        # with torch.no_grad():
-        #     lamb = self.lay(X)
-        #     self.add()
-        # X = self.fc(X)
-        # X = F.sigmoid(X)
-        # X = self.apply_lamb(10, X, lamb)
+        # Layer: 1
+        with torch.no_grad(): lamb = self.solay1(X)
+        self.fc1 = self.add(self.solay1, self.fc1)
+        X = F.sigmoid(self.fc1(X))
+        X = self.apply_lamb(self.solay1, X, lamb)
+        # Layer: 2
+        with torch.no_grad(): lamb = self.solay2(X)
+        self.fc2 = self.add(self.solay2, self.fc2)
+        X = F.sigmoid(self.fc2(X))
+        X = self.apply_lamb(self.solay2, X, lamb)
+        # Layer: 3
+        with torch.no_grad(): lamb = self.solay3(X)
+        self.fc3 = self.add(self.solay3, self.fc3)
+        X = (self.fc3(X))
+        X = self.apply_lamb(self.solay3, X, lamb)
 
         return X
 
+    @staticmethod
+    def add(solay, fc) -> None:
+        in_features = solay.in_features
+        new_out_features = solay.out_features_per_rule * solay.n_rules
+        old_out_features = fc.out_features
+        if new_out_features != old_out_features: # requaires new neurons
+            new_fc = nn.Linear(in_features, new_out_features)
+            new_fc.weight.data[:old_out_features] = fc.weight.data.clone()
+            new_fc.bias.data[:old_out_features] = fc.bias.data.clone()
+            return new_fc
+        return fc
+        
+        
+    @staticmethod    
+    def apply_lamb(solay: int, X: torch.Tensor, lambdas: torch.Tensor) -> torch.Tensor:
+        n_outputs = solay.out_features_per_rule
+        n_samples, n_rules = lambdas.shape
+        return torch.einsum("lRS,ROS->lOS",
+            lambdas.transpose(1,0).reshape([1, n_rules, n_samples]),
+            X.transpose(1,0).reshape([n_rules, n_outputs, n_samples])
+        ).transpose(1,0).reshape(n_samples, n_outputs)
+            
+            
     # -----------------------------------------------------------------------
     def add_neurons(self, layer_index: int) -> None:
         """
@@ -241,11 +274,12 @@ class SOMFNN(nn.Module):
         self.init_weights_type = init_weights_type
 
     # -----------------------------------------------------------------------
-    def trainnet(net, train_loader: DataLoader, verbose: bool = True, val_loader: DataLoader = None) -> None:
+    def trainnet(self, train_loader: DataLoader, verbose: bool = True, val_loader: DataLoader = None) -> None:
         """
         Train the network with the given data.
         """
-        if train_loader.dataset.tensors[0].shape[1] != net.neurons[0]:
+        self.optimizer = optim.SGD(self.parameters(), lr=0.1)
+        if train_loader.dataset.tensors[0].shape[1] != self.neurons[0]:
             raise ValueError("Input dimension mismatch")
         # if dataloader.dataset.tensors[1].ndim == 1:
         #     if dataloader.dataset.tensors[1].shape[1] != net.neurons[-1]:
@@ -254,59 +288,60 @@ class SOMFNN(nn.Module):
         train_losses, val_losses = [], []
         train_accuracies, val_accuracies = [], []
 
-        if net.training_plot: 
+        if self.training_plot: 
             plt.ion() # Enable interactive mode
             fig, axs = plt.subplots(2, figsize=(10, 8))
 
         
-        for epoch in range(net.num_epochs):
+        for epoch in range(self.num_epochs):
 
             # Training
-            net.train()
+            self.train()
             train_loss = 0.0
             train_preds, train_labels = [], []
 
             for X, Y in train_loader:
-                X, Y = X.to(net.device), Y.to(net.device)
-                if net.loss_fn_name == "CE": Y = Y.long()
+                X, Y = X.to(self.device), Y.to(self.device)
+                # if net.loss_fn_name == "CE": Y = Y.long()
 
                 # Compute prediction error
-                Yhat = net(X)
-                loss = net.loss_fn(Yhat, Y)
+                Yhat = self(X)
+                loss = self.loss_fn(Yhat.squeeze(1), Y)
 
                 # Backpropagation
                 loss.backward()
-                net.optimizer.step()
-                net.optimizer.zero_grad()
+                self.optimizer.step()
+                self.optimizer.zero_grad()
                 
                 # print(Yhat.argmax(1) == Y)
 
                 train_loss += loss.item()
-                if net.loss_fn_name == "CE":
+                if self.loss_fn_name == "CE":
                     train_preds.extend(Yhat.argmax(1).cpu().numpy())
-                elif net.loss_fn_name == "MSE":
+                elif self.loss_fn_name == "MSE":
                     train_preds.extend(Yhat.detach().cpu().numpy())
                 train_labels.extend(Y.cpu().numpy())
 
             train_loss /= len(train_loader)
-            train_accuracy = accuracy_score(train_labels, train_preds)
-            train_f1 = f1_score(train_labels, train_preds, average='weighted')
+            # train_accuracy = accuracy_score(train_labels, train_preds)
+            train_accuracy = mean_squared_error(train_labels, train_preds)
+            # train_f1 = f1_score(train_labels, train_preds, average='weighted')
 
             # Validation
             if val_loader:
-                net.eval()
+                self.eval()
                 val_loss = 0.0
                 val_preds, val_labels = [], []
 
                 with torch.no_grad():
                     for X, Y in val_loader:
-                        Yhat = net(X)
-                        loss = net.loss_fn(Yhat, Y)
+                        Yhat = self(X)
+                        loss = self.loss_fn(Yhat, Y)
 
                         val_loss += loss.item()
-                        if net.loss_fn_name == "CE":
+                        if self.loss_fn_name == "CE":
                             val_preds.extend(torch.argmax(Yhat, dim=1).cpu().numpy())
-                        elif net.loss_fn_name == "MSE":
+                        elif self.loss_fn_name == "MSE":
                             val_preds.extend(Yhat.cpu().numpy())
                         val_labels.extend(Y.cpu().numpy())
                 
@@ -322,7 +357,7 @@ class SOMFNN(nn.Module):
                 val_accuracies.append(val_accuracy)
 
             # Plot the learning curve
-            if net.training_plot:
+            if self.training_plot:
                 axs[0].clear()
                 axs[0].plot(range(1, epoch+2), train_losses, label='Train Loss')
                 axs[0].plot(range(1, epoch+2), val_losses, label='Val Loss')
@@ -338,19 +373,19 @@ class SOMFNN(nn.Module):
                 plt.pause(0.01)
 
             rules = []
-            for i in range(net.num_layers):
-                rules.append(net.layers_info[i].n_rules)
+            # for i in range(net.num_layers):
+            #     rules.append(net.layers_info[i].n_rules)
 
             # Print the loss for the current epoch
             if verbose:
                 if val_loader:
-                    print(f"Epoch {epoch+1}/{net.num_epochs}, Loss: {loss.item():.4f}, Train Acc: {train_accuracy:.4f}, Val Acc: {val_accuracy:.4f}")
+                    print(f"Epoch {epoch+1}/{self.num_epochs}, Loss: {loss.item():.4f}, Train Acc: {train_accuracy:.4f}, Val Acc: {val_accuracy:.4f}")
                 else:
-                    print(f"Epoch [{epoch+1}/{net.num_epochs}], Loss: [{train_loss:.2f}], Train Acc: [{train_accuracy*100:.2f}], rules: {rules}")
+                    print(f"Epoch [{epoch+1}/{self.num_epochs}], Loss: [{train_loss:.2f}], Train Acc: [{train_accuracy*100:.2f}], rules: {rules}")
 
         print("Done")
         # Plot the final learning curve
-        if net.training_plot:    
+        if self.training_plot:    
             plt.ioff() # Disable interactive mode after training is done
             plt.show() # Show the final plot
         
@@ -370,3 +405,7 @@ class SOMFNN(nn.Module):
                 total_loss += loss.item()
         average_loss = total_loss / len(dataloader)
         print(f"Test Loss: {average_loss:.4f}")
+
+def SOlayer(in_features, out_features):
+    fc = nn.Linear(in_features,out_features)
+    so = Layer(1,in_features,out_features)
