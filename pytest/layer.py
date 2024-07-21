@@ -9,8 +9,7 @@ class Layer:
     """
     A class representing a layer in the neural network.
     """
-    def __init__(self, layer_number: int = None, in_features: int = None,
-                 out_features: int = None) -> None:
+    def __init__(self, layer_number: int = None, in_features: int = None, out_features: int = None):
         self.layer_number = layer_number  # layer number
         self.in_features = in_features  # number of inputs
         self.out_features_per_rule = out_features  # number of outputs

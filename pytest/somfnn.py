@@ -44,12 +44,11 @@ class SOMFNN(nn.Module):
         #     self.fc_layers.append(nn.Linear(self.neurons[i], self.neurons[i + 1]))
         #     self.layers_info.append(Layer(i + 1, self.neurons[i], self.neurons[i + 1]))
 
-        self.fc1 = nn.Linear(5,10)
-        self.solay1 = Layer(1,5,10)
-        self.fc2 = nn.Linear(10,10)
-        self.solay2 = Layer(1,10,10)
-        self.fc3 = nn.Linear(10,1)
-        self.solay3 = Layer(1,10,1)
+        self.fc1 = nn.Linear(16,30)
+        self.solay1 = Layer(1,16,30)
+        self.fc2 = nn.Linear(30,30)
+        self.solay2 = Layer(1,30,10)
+
 
         # Set options
         self.loss_fn = None
@@ -86,14 +85,10 @@ class SOMFNN(nn.Module):
         # Layer: 2
         with torch.no_grad(): lamb = self.solay2(X)
         self.fc2 = self.add(self.solay2, self.fc2)
-        X = F.sigmoid(self.fc2(X))
+        X = (self.fc2(X))
         X = self.apply_lamb(self.solay2, X, lamb)
-        # Layer: 3
-        with torch.no_grad(): lamb = self.solay3(X)
-        self.fc3 = self.add(self.solay3, self.fc3)
-        X = (self.fc3(X))
-        X = self.apply_lamb(self.solay3, X, lamb)
-
+        X = F.softmax(X, dim=1)
+  
         return X
 
     @staticmethod
@@ -113,6 +108,9 @@ class SOMFNN(nn.Module):
     def apply_lamb(solay: int, X: torch.Tensor, lambdas: torch.Tensor) -> torch.Tensor:
         n_outputs = solay.out_features_per_rule
         n_samples, n_rules = lambdas.shape
+
+        return X.reshape([n_samples, n_rules, n_outputs]).transpose(1,2).sum(2)
+
         return torch.einsum("lRS,ROS->lOS",
             lambdas.transpose(1,0).reshape([1, n_rules, n_samples]),
             X.transpose(1,0).reshape([n_rules, n_outputs, n_samples])
@@ -278,7 +276,6 @@ class SOMFNN(nn.Module):
         """
         Train the network with the given data.
         """
-        self.optimizer = optim.SGD(self.parameters(), lr=0.1)
         if train_loader.dataset.tensors[0].shape[1] != self.neurons[0]:
             raise ValueError("Input dimension mismatch")
         # if dataloader.dataset.tensors[1].ndim == 1:
@@ -302,11 +299,11 @@ class SOMFNN(nn.Module):
 
             for X, Y in train_loader:
                 X, Y = X.to(self.device), Y.to(self.device)
-                # if net.loss_fn_name == "CE": Y = Y.long()
+                if self.loss_fn_name == "CE": Y = Y.long()
 
                 # Compute prediction error
                 Yhat = self(X)
-                loss = self.loss_fn(Yhat.squeeze(1), Y)
+                loss = self.loss_fn(Yhat, Y)
 
                 # Backpropagation
                 loss.backward()
@@ -323,8 +320,8 @@ class SOMFNN(nn.Module):
                 train_labels.extend(Y.cpu().numpy())
 
             train_loss /= len(train_loader)
-            # train_accuracy = accuracy_score(train_labels, train_preds)
-            train_accuracy = mean_squared_error(train_labels, train_preds)
+            train_accuracy = accuracy_score(train_labels, train_preds)
+            # train_accuracy = mean_squared_error(train_labels, train_preds)
             # train_f1 = f1_score(train_labels, train_preds, average='weighted')
 
             # Validation
