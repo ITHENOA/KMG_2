@@ -11,7 +11,6 @@ from torchmetrics import Accuracy
 
 from layer import Layer
 # from utils import get_device
-from Solayer import Solayer
 
 
 class SOMFNN(nn.Module):
@@ -426,6 +425,6 @@ class SOMFNN(nn.Module):
         average_loss = total_loss / len(dataloader)
         print(f"Test Loss: {average_loss:.4f}")
 
-def SOlayer(in_features, out_features):
-    fc = nn.Linear(in_features,out_features)
-    so = Layer(1,in_features,out_features)
+def Solayer(in_features, out_features):
+    from SOLAYER import SOLAYER
+    return SOLAYER(in_features, out_features)

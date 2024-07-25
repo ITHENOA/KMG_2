@@ -36,7 +36,7 @@ def main():
     # val_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     # Initialize network
-    model = SOMFNN(in_features=X.shape[-1], hidden_features=[], out_features=10, device="cuda")
+    model = SOMFNN(in_features=X.shape[-1], hidden_features=[], out_features=10, device="cpu")
     model.set_options(
         num_epochs=50, 
         learning_rate=0.001, 

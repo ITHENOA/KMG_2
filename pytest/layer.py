@@ -2,15 +2,15 @@ import torch
 from torch import tensor, cat
 import numpy
 
-from utils import squared_euclidean_norm, get_device, similarity_thresh, add_to_mean
+from utils import squared_euclidean_norm, similarity_thresh, add_to_mean
 
 
 class Layer:
     """
     A class representing a layer in the neural network.
     """
-    def __init__(self, layer_number: int = None, in_features: int = None, out_features: int = None, device: str = "cpu"):
-        self.layer_number = layer_number  # layer number
+    def __init__(self,in_features: int = None, out_features: int = None, device: str = "cpu"):
+        # self.layer_number = layer_number  # layer number
         self.in_features = in_features  # number of inputs
         self.out_features_per_rule = out_features  # number of outputs
         self.n_rules = 0  # number of rules
