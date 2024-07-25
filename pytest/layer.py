@@ -9,20 +9,19 @@ class Layer:
     """
     A class representing a layer in the neural network.
     """
-    def __init__(self, layer_number: int = None, in_features: int = None, out_features: int = None):
+    def __init__(self, layer_number: int = None, in_features: int = None, out_features: int = None, device: str = "cpu"):
         self.layer_number = layer_number  # layer number
         self.in_features = in_features  # number of inputs
         self.out_features_per_rule = out_features  # number of outputs
         self.n_rules = 0  # number of rules
-        self.global_mean = torch.zeros(in_features)  # Global Mean, shape([num_inputs])
-        self.global_sen_mean = tensor(0.)  # Global Mean of Squared Euclidean Norm
-        self.prototypes = torch.empty(0)  # (rules, features)
-        self.centroids = torch.empty(0) # (rules, features) mean of samples in clusters
-        self.sen_centroids = torch.empty(0)  # (rules, 1) squared Euclidean norm of samples
+        self.global_mean = torch.zeros(in_features, device=device)  # Global Mean, shape([num_inputs])
+        self.global_sen_mean = tensor(0., device=device)  # Global Mean of Squared Euclidean Norm
+        self.prototypes = torch.empty(0, device=device)  # (rules, features)
+        self.centroids = torch.empty(0, device=device) # (rules, features) mean of samples in clusters
+        self.sen_centroids = torch.empty(0, device=device)  # (rules, 1) squared Euclidean norm of samples
         self.support = []  # (rules, 1) number of samples in clusters
         self.num_seen_samples = 0
-        # self.device = get_device()
-        # self.to(self.device)
+        self.device = device
 
     # -----------------------------------------------------------------------
     def __call__(self, X: torch.Tensor) -> torch.Tensor:
@@ -31,7 +30,7 @@ class Layer:
 
         # sample_rules = []  # clusters NO of each sample
 
-        for x, sen in zip(X.unbind(), SEN.unbind()):
+        for x, sen in zip(X, SEN):
             # sen becomes 1D matrix
             sen = sen.unsqueeze(0)
             # x becomes 2D matrix
@@ -67,7 +66,7 @@ class Layer:
     def rule_condition(self, x: torch.Tensor) -> tuple:
         densities = self.local_density(x) # (samples, rules)
         value, index = torch.max(densities, dim=1) # max over rules
-        return value[0] < similarity_thresh, index[0]
+        return value[0] < similarity_thresh.to(self.device), index[0]
 
     # -----------------------------------------------------------------------
     def local_density(self, X: torch.Tensor, kernel: str = "RBF") -> torch.Tensor:

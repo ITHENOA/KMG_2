@@ -6,10 +6,12 @@ from torch.utils.data import DataLoader
 # import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, f1_score
 from time import time
-
+from torchmetrics import Accuracy
+# F.linear(x)
 
 from layer import Layer
-from utils import get_device
+# from utils import get_device
+from Solayer import Solayer
 
 
 class SOMFNN(nn.Module):
@@ -17,10 +19,16 @@ class SOMFNN(nn.Module):
     Self-Organizing Multilayer Fuzzy Neural Network class.
     """
 
-    def __init__(
-        self, in_features: int = 3, hidden_features: list = [], out_features: int = 1):
+    def __init__(self, in_features: int = 3, hidden_features: list = [], out_features: int = 1, device="cpu"):
         super(SOMFNN, self).__init__()
 
+        if device == "cuda" and not torch.cuda.is_available():
+            print("cuda is not avalable.")
+            device = "cpu"
+        self.device = device
+        print(f"using {self.device} device ...")
+        self.to(self.device)
+        
         # check inputs
         # if hidden_features is None:
         #     hidden_features = []
@@ -36,26 +44,29 @@ class SOMFNN(nn.Module):
         # Set parameters
         self.neurons = in_features + hidden_features + out_features
         self.num_layers = len(self.neurons) - 1
+        # self.weights = nn.Parameter(tor)
+        
+        # Set options
+        self.loss_fn = None
+        self.optimizer = None
+        self.num_epochs = None
         
         # Create the fully connected layers and layer information objects
         # self.fc_layers = nn.ModuleList()
         # self.layers_info = []
         # for i in range(self.num_layers):
         #     self.fc_layers.append(nn.Linear(self.neurons[i], self.neurons[i + 1]))
-        #     self.layers_info.append(Layer(i + 1, self.neurons[i], self.neurons[i + 1]))
+        #     self.layers_info.append(Layer(i + 1, self.neurons[i], self.neurons[i + 1], device=self.device))
 
-        self.fc1 = nn.Linear(16,30)
-        self.solay1 = Layer(1,16,30)
-        self.fc2 = nn.Linear(30,30)
-        self.solay2 = Layer(1,30,10)
-
-
-        # Set options
-        self.loss_fn = None
-        self.optimizer = None
-        self.num_epochs = None
-        self.device = get_device()
-        self.to(self.device)
+        # self.fc1 = nn.Linear(16,10)
+        # self.solay1 = Layer(1,16,10, device=self.device)
+        # self.fc2 = nn.Linear(30,30)
+        # self.solay2 = Layer(1,30,30, device=self.device)
+        # self.fc3 = nn.Linear(30,10)
+        # self.solay3 = Layer(1,30,10, device=self.device)
+        
+        self.solay1 = Solayer(16,10)
+        
 
     # -----------------------------------------------------------------------
     def forward(self, X: torch.Tensor) -> torch.Tensor:
@@ -64,7 +75,7 @@ class SOMFNN(nn.Module):
 
         X.shape = (Batch, in_features)
         """
-        # Loop over all layers
+        # # Loop over all layers
         # for l in range(self.num_layers):
         #     with torch.no_grad():
         #         # Compute lambda functions for the current layer
@@ -77,44 +88,50 @@ class SOMFNN(nn.Module):
         #     # Compute the next input for the network
         #     X = self.apply_rule_strength(l, X, lambdas) # X.shape = (Batch, out_features)
 
-        # Layer: 1
-        with torch.no_grad(): lamb = self.solay1(X)
-        self.fc1 = self.add(self.solay1, self.fc1)
-        X = F.sigmoid(self.fc1(X))
-        X = self.apply_lamb(self.solay1, X, lamb)
-        # Layer: 2
-        with torch.no_grad(): lamb = self.solay2(X)
-        self.fc2 = self.add(self.solay2, self.fc2)
-        X = (self.fc2(X))
-        X = self.apply_lamb(self.solay2, X, lamb)
-        X = F.softmax(X, dim=1)
-  
+        # # Layer: 1
+        # with torch.no_grad(): lamb = self.solay1(X)
+        # self.fc1 = self.add(self.solay1, self.fc1)
+        # # w = torch.cat()
+        # X = self.fc1(X)
+        # X = F.sigmoid(X)
+        # X = self.apply_lamb(self.solay1, X, lamb)
+        # # # Layer: 2
+        # # with torch.no_grad(): lamb = self.solay2(X)
+        # # self.fc2 = self.add(self.solay2, self.fc2)
+        # # X = F.sigmoid(self.fc2(X))
+        # # X = self.apply_lamb(self.solay2, X, lamb)
+        # # # Layer: 3
+        # # with torch.no_grad(): lamb = self.solay3(X)
+        # # self.fc3 = self.add(self.solay3, self.fc3)
+        # # X = (self.fc3(X))
+        # # X = self.apply_lamb(self.solay3, X, lamb)
+        
+        X = self.solay1(X)
+
         return X
 
-    @staticmethod
-    def add(solay, fc) -> None:
-        in_features = solay.in_features
-        new_out_features = solay.out_features_per_rule * solay.n_rules
-        old_out_features = fc.out_features
-        if new_out_features != old_out_features: # requaires new neurons
-            new_fc = nn.Linear(in_features, new_out_features)
-            new_fc.weight.data[:old_out_features] = fc.weight.data.clone()
-            new_fc.bias.data[:old_out_features] = fc.bias.data.clone()
-            return new_fc
-        return fc
+    # @staticmethod
+    # def add(solay, fc) -> None:
+    #     in_features = solay.in_features
+    #     new_out_features = solay.out_features_per_rule * solay.n_rules
+    #     old_out_features = fc.out_features
+    #     if new_out_features != old_out_features: # requaires new neurons
+    #         new_fc = nn.Linear(in_features, new_out_features)
+    #         new_fc.weight.data[:old_out_features] = fc.weight.data.clone()
+    #         new_fc.bias.data[:old_out_features] = fc.bias.data.clone()
+    #         return new_fc.to(fc.weight.device.type)
+    #     return fc
         
         
-    @staticmethod    
-    def apply_lamb(solay: int, X: torch.Tensor, lambdas: torch.Tensor) -> torch.Tensor:
-        n_outputs = solay.out_features_per_rule
-        n_samples, n_rules = lambdas.shape
-
-        return X.reshape([n_samples, n_rules, n_outputs]).transpose(1,2).sum(2)
-
-        return torch.einsum("lRS,ROS->lOS",
-            lambdas.transpose(1,0).reshape([1, n_rules, n_samples]),
-            X.transpose(1,0).reshape([n_rules, n_outputs, n_samples])
-        ).transpose(1,0).reshape(n_samples, n_outputs)
+    # @staticmethod    
+    # def apply_lamb(solay: int, X: torch.Tensor, lambdas: torch.Tensor) -> torch.Tensor:
+    #     n_outputs = solay.out_features_per_rule
+    #     n_samples, n_rules = lambdas.shape
+    #     # return X.reshape([n_samples, n_rules, n_outputs]).transpose(1,2).sum(2)
+    #     return torch.einsum("lRS,ROS->lOS",
+    #         lambdas.transpose(1,0).reshape([1, n_rules, n_samples]),
+    #         X.transpose(1,0).reshape([n_rules, n_outputs, n_samples])
+        # ).transpose(1,0).reshape(n_samples, n_outputs)
             
             
     # -----------------------------------------------------------------------
@@ -276,6 +293,8 @@ class SOMFNN(nn.Module):
         """
         Train the network with the given data.
         """
+        self = self.to(self.device)
+        
         if train_loader.dataset.tensors[0].shape[1] != self.neurons[0]:
             raise ValueError("Input dimension mismatch")
         # if dataloader.dataset.tensors[1].ndim == 1:
@@ -291,6 +310,7 @@ class SOMFNN(nn.Module):
 
         
         for epoch in range(self.num_epochs):
+            
 
             # Training
             self.train()
@@ -307,6 +327,8 @@ class SOMFNN(nn.Module):
 
                 # Backpropagation
                 loss.backward()
+                # self.optimizer = optim.Adam(self.parameters(), lr=1)
+                self.optimizer.param_groups[0]['params'] = list(self.parameters())
                 self.optimizer.step()
                 self.optimizer.zero_grad()
                 
@@ -321,7 +343,7 @@ class SOMFNN(nn.Module):
 
             train_loss /= len(train_loader)
             train_accuracy = accuracy_score(train_labels, train_preds)
-            # train_accuracy = mean_squared_error(train_labels, train_preds)
+            #train_accuracy = mean_squared_error(train_labels, train_preds)
             # train_f1 = f1_score(train_labels, train_preds, average='weighted')
 
             # Validation
@@ -343,7 +365,8 @@ class SOMFNN(nn.Module):
                         val_labels.extend(Y.cpu().numpy())
                 
                 val_loss /= len(val_loader)
-                val_accuracy = accuracy_score(val_labels, val_preds)
+                val_accuracy = Accuracy()
+                # val_accuracy = accuracy_score(val_labels, val_preds)
                 val_f1 = f1_score(val_labels, val_preds, average='weighted')
             
             # Append the losses and accuracies

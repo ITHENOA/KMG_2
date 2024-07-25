@@ -1,3 +1,6 @@
+import gc
+gc.collect()
+
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 # import matplotlib.pyplot as plt
@@ -17,13 +20,13 @@ def main():
     # X = MinMaxScaler.fit_transform(X, ) # normalize [0,1]
     X = torch.tensor(X, dtype=torch.float32)
     Y = torch.tensor(Y, dtype=torch.float32)
-    X = (X - X.min(0).values) / (X.max(0).values - X.min(0).values)
     # Y = (Y - Y.min(0).values) / (Y.max(0).values - Y.min(0).values)
     print(f"x shape: {X.shape} \nY shape: {Y.shape}")
     Xtr, Xte, Ytr, Yte = train_test_split(X, Y, test_size=0.2)
+    Xtr = (Xtr - Xtr.min(0).values) / (Xtr.max(0).values - Xtr.min(0).values)
     # Xtr, Xval, Ytr, Yval = train_test_split(Xtr, Ytr, test_size=0.1)
 
-    batch_size = 10
+    batch_size = 32
     # Create dataset and dataloader
     dataset = TensorDataset(Xtr, Ytr)
     train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -33,12 +36,12 @@ def main():
     # val_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     # Initialize network
-    model = SOMFNN(in_features=X.shape[-1], hidden_features=[], out_features=10)
+    model = SOMFNN(in_features=X.shape[-1], hidden_features=[], out_features=10, device="cuda")
     model.set_options(
         num_epochs=50, 
-        learning_rate=.1, 
+        learning_rate=0.001, 
         criterion="CE", # MSE | BCE | CE
-        optimizer="SGD",  # SGD | Adam | RMSprop
+        optimizer="Adam",  # SGD | Adam | RMSprop
         training_plot=False,
         init_weights_type=None # None(pytorch default) | in_paper | mean
     )
