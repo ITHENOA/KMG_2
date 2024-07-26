@@ -326,7 +326,8 @@ class SOMFNN(nn.Module):
 
                 # Backpropagation
                 loss.backward()
-                # self.optimizer = optim.Adam(self.parameters(), lr=1)
+                # self.optimizer = optim.Adam(self.parameters(), lr=.001)
+                # self.optimizer = optim.SGD(self.parameters(), lr=1)
                 self.optimizer.param_groups[0]['params'] = list(self.parameters())
                 self.optimizer.step()
                 self.optimizer.zero_grad()

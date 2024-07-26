@@ -13,6 +13,8 @@ class SOLAYER(SOMFNN):
         self.fc = torch.nn.Linear(in_features, out_features)
         self.infolayer = Layer(in_features, out_features)
         self.activation = getattr(F, activation)
+        self.init_weights_type = None
+        self.device = 'cpu'
     
     def __call__(self, X):
         with torch.no_grad():
@@ -42,23 +44,27 @@ class SOLAYER(SOMFNN):
             # create new fully connected layer
             new_fc = torch.nn.Linear(in_features, new_out_features)
             
-            # copy previous weights and biases
-            old_weights = self.fc.weight.data.clone()
-            old_biases = self.fc.bias.data.clone()
+            # # copy previous weights and biases
+            # old_weights = self.fc.weight.data.clone()
+            # old_biases = self.fc.bias.data.clone()
             
-            # randimize weights initialization
-            new_fc.weight.data[:old_out_features] = old_weights
-            new_fc.bias.data[:old_out_features] = old_biases
+            # # randimize weights initialization
+            # new_fc.weight.data[:old_out_features] = old_weights
+            # new_fc.bias.data[:old_out_features] = old_biases
+
+            with torch.no_grad():
+                new_fc.weight[:old_out_features] = self.fc.weight
+                new_fc.bias[:old_out_features] = self.fc.bias
             
             # mean weights initialization
-            if SOMFNN.init_weights_type == "mean":
+            if self.init_weights_type == "mean":
                 n_added_rules = int((new_out_features - old_out_features) / self.infolayer.out_features_per_rule)
                 init_weights = torch.reshape(old_weights, [self.infolayer.out_features_per_rule, old_weights.shape[1], self.infolayer.n_rules - n_added_rules]).mean(2)
                 init_biases = torch.reshape(old_biases, [self.infolayer.out_features_per_rule, self.infolayer.n_rules - n_added_rules]).mean(1)
                 new_fc.weight.data[old_out_features:] = init_weights.repeat(n_added_rules, 1)
                 new_fc.bias.data[old_out_features:] = init_biases.repeat(n_added_rules)
 
-            if SOMFNN.init_weights_type == "in_paper":
+            if self.init_weights_type == "in_paper":
                 new_fc.weight.data[old_out_features:] = torch.randint(0, 2, [new_out_features - old_out_features, in_features]) / (in_features+1)
                 new_fc.bias.data[old_out_features:] = torch.randint(0, 2, [new_out_features - old_out_features]) / (in_features+1)
 
@@ -130,11 +136,11 @@ class SOLAYER(SOMFNN):
 
         ### method 5 ### [2s for rep=1000, batch=128]
         # l:1, R:n_rule, O:n_out, S:n_sample
-        # return torch.einsum("lRS,ROS->lOS",
-        #     lambdas.mT.reshape([1, n_rules, n_samples]),
-        #     X.mT.reshape([n_rules, n_outputs, n_samples])
-        # ).mT.reshape(n_samples, n_outputs)
         return torch.einsum("lRS,ROS->lOS",
-            lambdas.transpose(1,0).reshape([1, n_rules, n_samples]),
-            X.transpose(1,0).reshape([n_rules, n_outputs, n_samples])
-        ).transpose(1,0).reshape(n_samples, n_outputs)
+            lambdas.mT.reshape([1, n_rules, n_samples]),
+            X.mT.reshape([n_rules, n_outputs, n_samples])
+        ).mT.reshape(n_samples, n_outputs)
+        # return torch.einsum("lRS,ROS->lOS",
+        #     lambdas.transpose(1,0).reshape([1, n_rules, n_samples]),
+        #     X.transpose(1,0).reshape([n_rules, n_outputs, n_samples])
+        # ).transpose(1,0).reshape(n_samples, n_outputs)

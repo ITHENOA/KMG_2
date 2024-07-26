@@ -26,7 +26,7 @@ def main():
     Xtr = (Xtr - Xtr.min(0).values) / (Xtr.max(0).values - Xtr.min(0).values)
     # Xtr, Xval, Ytr, Yval = train_test_split(Xtr, Ytr, test_size=0.1)
 
-    batch_size = 32
+    batch_size = 10
     # Create dataset and dataloader
     dataset = TensorDataset(Xtr, Ytr)
     train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -39,9 +39,9 @@ def main():
     model = SOMFNN(in_features=X.shape[-1], hidden_features=[], out_features=10, device="cpu")
     model.set_options(
         num_epochs=50, 
-        learning_rate=0.001, 
+        learning_rate=.1, 
         criterion="CE", # MSE | BCE | CE
-        optimizer="Adam",  # SGD | Adam | RMSprop
+        optimizer="SGD",  # SGD | Adam | RMSprop
         training_plot=False,
         init_weights_type=None # None(pytorch default) | in_paper | mean
     )
