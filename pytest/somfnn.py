@@ -21,10 +21,7 @@ class SOMFNN(nn.Module):
     def __init__(self, in_features: int = 3, hidden_features: list = [], out_features: int = 1, device="cpu"):
         super(SOMFNN, self).__init__()
 
-        if device == "cuda" and not torch.cuda.is_available():
-            print("cuda is not avalable.")
-            device = "cpu"
-        self.device = device
+        self.device = "cuda" if device=="cuda" and torch.cuda.is_available() else "cpu"
         print(f"using {self.device} device ...")
         self.to(self.device)
         
@@ -64,7 +61,7 @@ class SOMFNN(nn.Module):
         # self.fc3 = nn.Linear(30,10)
         # self.solay3 = Layer(1,30,10, device=self.device)
         
-        self.solay1 = Solayer(16,10)
+        self.solay1 = Solayer(16,10, device=self.device)
         
 
     # -----------------------------------------------------------------------

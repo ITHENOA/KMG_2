@@ -3,18 +3,18 @@ import torch
 import torch.nn.functional as F
 
 from layer import Layer
-from somfnn import SOMFNN
+# from somfnn import SOMFNN
 
-class SOLAYER(SOMFNN):
+class SOLAYER(torch.nn.Module):
     def __init__(self, in_features, out_features, activation="sigmoid"):
-        super(SOMFNN, self).__init__()
+        super(SOLAYER, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.fc = torch.nn.Linear(in_features, out_features)
-        self.infolayer = Layer(in_features, out_features)
+        self.infolayer = Layer(in_features, out_features, device=self.device)
         self.activation = getattr(F, activation)
         self.init_weights_type = None
-        self.device = 'cpu'
+        self.to(self.device)
     
     def __call__(self, X):
         with torch.no_grad():
@@ -42,7 +42,7 @@ class SOLAYER(SOMFNN):
         
         if new_out_features != old_out_features: # requaires new neurons
             # create new fully connected layer
-            new_fc = torch.nn.Linear(in_features, new_out_features)
+            new_fc = torch.nn.Linear(in_features, new_out_features, device=self.device)
             
             # # copy previous weights and biases
             # old_weights = self.fc.weight.data.clone()
@@ -69,7 +69,7 @@ class SOLAYER(SOMFNN):
                 new_fc.bias.data[old_out_features:] = torch.randint(0, 2, [new_out_features - old_out_features]) / (in_features+1)
 
             # update self.layers[layer_index]
-            self.fc = new_fc.to(self.device)
+            self.fc = new_fc
 
     # -----------------------------------------------------------------------
     def apply_rule_strength(self, X: torch.Tensor, lambdas: torch.Tensor) -> torch.Tensor:

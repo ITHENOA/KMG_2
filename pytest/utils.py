@@ -17,6 +17,10 @@ similarity_thresh = torch.exp(tensor([-3]))
 #     )
 #     return device
 
+def get_device(required):
+    device = "cuda" if required=="cuda" and torch.cuda.is_available() else "cpu"
+    # print(f"your device is: {self.device}")
+
 
 def squared_euclidean_norm(x: torch.Tensor, dim_features: int = None) -> torch.Tensor:
     """
