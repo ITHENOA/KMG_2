@@ -5,7 +5,7 @@ import numpy
 from utils import squared_euclidean_norm, similarity_thresh, add_to_mean
 
 
-class Layer:
+class Corelayer:
     """
     A class representing a layer in the neural network.
     """

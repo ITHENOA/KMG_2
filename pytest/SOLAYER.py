@@ -2,7 +2,7 @@
 import torch
 import torch.nn.functional as F
 
-from layer import Layer
+from CORELAYER import Corelayer
 # from somfnn import SOMFNN
 
 class Solayer(torch.nn.Module):
@@ -11,30 +11,25 @@ class Solayer(torch.nn.Module):
         self.in_features = in_features
         self.out_features = out_features
         self.fc = torch.nn.Linear(in_features, out_features)
-        self.infolayer = Layer(in_features, out_features)
+        self.core = Corelayer(in_features, out_features)
         # self.activation = getattr(F, activation)
         self.init_weights_type = init_weights_type
         self.first_call = True
     
-    def forward(self, X, activation="sigmoid"):
+    def forward(self, X, activation=None):
         
         if self.first_call:
             self.device = X.device.type
             self.first_call = False
         
-        # with torch.no_grad():
-        #     # Compute lambda functions for the current layer
-        #     lambdas = self.infolayer(X) # (samples, rules)
-        #     # Update the structure of the current pytorch fc layer
-        #     self.add_neurons()
-        
         # Compute lambda functions for the current layer
-        lambdas = self.infolayer(X.detach().cpu()).to(self.device) # (samples, rules)
+        # with torch.no_grad(): lambdas = self.core(X) # (samples, rules)
+        lambdas = self.core(X.detach().cpu()).to(self.device) # (samples, rules)
         # Update the structure of the current pytorch fc layer
         self.add_neurons()
         # Compute the output of the current layer
         X = self.fc(X) # X.shape = (Batch, Rule * out_features)
-        X = getattr(F, activation)(X)
+        X = getattr(F, activation)(X) if activation is not None else X # dont use for last layer
         # Compute the next input for the network
         X = self.apply_rule_strength(X, lambdas) # X.shape = (Batch, out_features)
         
@@ -46,8 +41,8 @@ class Solayer(torch.nn.Module):
         Update the structure of the fully connected layers.
         """
         # new in_features and out_features
-        in_features = self.infolayer.in_features
-        new_out_features = self.infolayer.out_features_per_rule * self.infolayer.n_rules
+        in_features = self.core.in_features
+        new_out_features = self.core.out_features_per_rule * self.core.n_rules
         old_out_features = self.fc.out_features
         
         if new_out_features != old_out_features: # requaires new neurons
@@ -67,9 +62,9 @@ class Solayer(torch.nn.Module):
             
             # mean weights initialization
             if self.init_weights_type == "mean":
-                n_added_rules = int((new_out_features - old_out_features) / self.infolayer.out_features_per_rule)
-                init_weights = torch.reshape(old_weights, [self.infolayer.out_features_per_rule, old_weights.shape[1], self.infolayer.n_rules - n_added_rules]).mean(2)
-                init_biases = torch.reshape(old_biases, [self.infolayer.out_features_per_rule, self.infolayer.n_rules - n_added_rules]).mean(1)
+                n_added_rules = int((new_out_features - old_out_features) / self.core.out_features_per_rule)
+                init_weights = torch.reshape(old_weights, [self.core.out_features_per_rule, old_weights.shape[1], self.core.n_rules - n_added_rules]).mean(2)
+                init_biases = torch.reshape(old_biases, [self.core.out_features_per_rule, self.core.n_rules - n_added_rules]).mean(1)
                 new_fc.weight.data[old_out_features:] = init_weights.repeat(n_added_rules, 1)
                 new_fc.bias.data[old_out_features:] = init_biases.repeat(n_added_rules)
 
@@ -91,7 +86,7 @@ class Solayer(torch.nn.Module):
         return.shape = (batch, out_features)
         """     
         # Extract number of outputs and rules from the layer info
-        n_outputs = self.infolayer.out_features_per_rule
+        n_outputs = self.core.out_features_per_rule
         # n_outputs = self.neurons[layer_index + 1]
         # n_outputs = layer_index
         n_samples, n_rules = lambdas.shape
