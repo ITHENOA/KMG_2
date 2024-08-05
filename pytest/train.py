@@ -11,11 +11,12 @@ import time
 
 
 from somfnn import SOMFNN
-from dataset import load_dataset
+from dataset import Dataset
 
 
 def main():
-    X, Y = load_dataset("pen")
+    # X, Y = load_dataset("pen")
+    dataset = Dataset("pen")
     # X = StandardScaler.fit_transform(X) # normalize (mean=0, std=1)
     # X = MinMaxScaler.fit_transform(X, ) # normalize [0,1]
     X = torch.tensor(X, dtype=torch.float32)

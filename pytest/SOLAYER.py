@@ -5,26 +5,36 @@ import torch.nn.functional as F
 from layer import Layer
 # from somfnn import SOMFNN
 
-class SOLAYER(torch.nn.Module):
-    def __init__(self, in_features, out_features, activation="sigmoid"):
-        super(SOLAYER, self).__init__()
+class Solayer(torch.nn.Module):
+    def __init__(self, in_features, out_features, init_weights_type=None):
+        super(Solayer, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.fc = torch.nn.Linear(in_features, out_features)
-        self.infolayer = Layer(in_features, out_features, device=self.device)
-        self.activation = getattr(F, activation)
-        self.init_weights_type = None
-        self.to(self.device)
+        self.infolayer = Layer(in_features, out_features)
+        # self.activation = getattr(F, activation)
+        self.init_weights_type = init_weights_type
+        self.first_call = True
     
-    def __call__(self, X):
-        with torch.no_grad():
-            # Compute lambda functions for the current layer
-            lambdas = self.infolayer(X) # (samples, rules)
-            # Update the structure of the current pytorch fc layer
-            self.add_neurons()
+    def forward(self, X, activation="sigmoid"):
+        
+        if self.first_call:
+            self.device = X.device.type
+            self.first_call = False
+        
+        # with torch.no_grad():
+        #     # Compute lambda functions for the current layer
+        #     lambdas = self.infolayer(X) # (samples, rules)
+        #     # Update the structure of the current pytorch fc layer
+        #     self.add_neurons()
+        
+        # Compute lambda functions for the current layer
+        lambdas = self.infolayer(X.detach().cpu()).to(self.device) # (samples, rules)
+        # Update the structure of the current pytorch fc layer
+        self.add_neurons()
         # Compute the output of the current layer
         X = self.fc(X) # X.shape = (Batch, Rule * out_features)
-        X = self.activation(X)
+        X = getattr(F, activation)(X)
         # Compute the next input for the network
         X = self.apply_rule_strength(X, lambdas) # X.shape = (Batch, out_features)
         
@@ -47,7 +57,6 @@ class SOLAYER(torch.nn.Module):
             # # copy previous weights and biases
             # old_weights = self.fc.weight.data.clone()
             # old_biases = self.fc.bias.data.clone()
-            
             # # randimize weights initialization
             # new_fc.weight.data[:old_out_features] = old_weights
             # new_fc.bias.data[:old_out_features] = old_biases

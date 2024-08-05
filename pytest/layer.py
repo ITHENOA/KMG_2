@@ -9,22 +9,25 @@ class Layer:
     """
     A class representing a layer in the neural network.
     """
-    def __init__(self,in_features: int = None, out_features: int = None, device: str = "cpu"):
+    def __init__(self,in_features: int = None, out_features: int = None):
         # self.layer_number = layer_number  # layer number
         self.in_features = in_features  # number of inputs
         self.out_features_per_rule = out_features  # number of outputs
         self.n_rules = 0  # number of rules
-        self.global_mean = torch.zeros(in_features, device=device)  # Global Mean, shape([num_inputs])
-        self.global_sen_mean = tensor(0., device=device)  # Global Mean of Squared Euclidean Norm
-        self.prototypes = torch.empty(0, device=device)  # (rules, features)
-        self.centroids = torch.empty(0, device=device) # (rules, features) mean of samples in clusters
-        self.sen_centroids = torch.empty(0, device=device)  # (rules, 1) squared Euclidean norm of samples
+        self.global_mean = torch.zeros(in_features)  # Global Mean, shape([num_inputs])
+        self.global_sen_mean = tensor(0.)  # Global Mean of Squared Euclidean Norm
+        self.prototypes = torch.empty(0)  # (rules, features)
+        self.centroids = torch.empty(0) # (rules, features) mean of samples in clusters
+        self.sen_centroids = torch.empty(0)  # (rules, 1) squared Euclidean norm of samples
         self.support = []  # (rules, 1) number of samples in clusters
         self.num_seen_samples = 0
-        self.device = device
+        # self.device = device
+        self.first_call = True
 
     # -----------------------------------------------------------------------
     def __call__(self, X: torch.Tensor) -> torch.Tensor:
+        
+        self.set_properties_device(X.device.type)
         SEN = squared_euclidean_norm(X, dim_features=1)
         self.update_global_parameters(X, SEN)
 
@@ -121,3 +124,18 @@ class Layer:
         self.centroids[rule_index] = add_to_mean(self.centroids[rule_index], self.support[rule_index], x)
         self.sen_centroids[rule_index] = add_to_mean(self.sen_centroids[rule_index], self.support[rule_index], sen_x)
         self.support[rule_index] += 1
+        
+    # -----------------------------------------------------------------------
+    def set_properties_device(self, device):
+        if self.first_call:
+            if device != "cpu":
+                self.global_mean.to(device)
+                self.global_sen_mean.to(device)
+                self.prototypes.to(device)
+                self.centroids.to(device)
+                self.sen_centroids.to(device)
+            self.device = device
+            self.first_call = False
+
+
+    # -----------------------------------------------------------------------

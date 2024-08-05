@@ -10,6 +10,7 @@ from torchmetrics import Accuracy
 # F.linear(x)
 
 from layer import Layer
+from SOLAYER import Solayer
 # from utils import get_device
 
 
@@ -61,7 +62,9 @@ class SOMFNN(nn.Module):
         # self.fc3 = nn.Linear(30,10)
         # self.solay3 = Layer(1,30,10, device=self.device)
         
-        self.solay1 = Solayer(16,10, device=self.device)
+        self.solay1 = Solayer(16,30)
+        self.solay2 = Solayer(30,10)
+        # self.solay3 = Solayer(32,10)
         
 
     # -----------------------------------------------------------------------
@@ -103,146 +106,10 @@ class SOMFNN(nn.Module):
         # # X = self.apply_lamb(self.solay3, X, lamb)
         
         X = self.solay1(X)
+        X = self.solay2(X)
 
         return X
 
-    # @staticmethod
-    # def add(solay, fc) -> None:
-    #     in_features = solay.in_features
-    #     new_out_features = solay.out_features_per_rule * solay.n_rules
-    #     old_out_features = fc.out_features
-    #     if new_out_features != old_out_features: # requaires new neurons
-    #         new_fc = nn.Linear(in_features, new_out_features)
-    #         new_fc.weight.data[:old_out_features] = fc.weight.data.clone()
-    #         new_fc.bias.data[:old_out_features] = fc.bias.data.clone()
-    #         return new_fc.to(fc.weight.device.type)
-    #     return fc
-        
-        
-    # @staticmethod    
-    # def apply_lamb(solay: int, X: torch.Tensor, lambdas: torch.Tensor) -> torch.Tensor:
-    #     n_outputs = solay.out_features_per_rule
-    #     n_samples, n_rules = lambdas.shape
-    #     # return X.reshape([n_samples, n_rules, n_outputs]).transpose(1,2).sum(2)
-    #     return torch.einsum("lRS,ROS->lOS",
-    #         lambdas.transpose(1,0).reshape([1, n_rules, n_samples]),
-    #         X.transpose(1,0).reshape([n_rules, n_outputs, n_samples])
-        # ).transpose(1,0).reshape(n_samples, n_outputs)
-            
-            
-    # -----------------------------------------------------------------------
-    def add_neurons(self, layer_index: int) -> None:
-        """
-        Update the structure of the fully connected layers.
-        """
-        layer = self.layers_info[layer_index]
-        # new in_features and out_features
-        in_features = layer.in_features
-        new_out_features = layer.out_features_per_rule * layer.n_rules
-        # new_out_features = layer.num_rules * layer.out_features
-        old_out_features = self.fc_layers[layer_index].out_features
-        # old_out_features = self.fc_layers[layer_index].out_features
-        
-        if new_out_features != old_out_features: # requaires new neurons
-            # create new fully connected layer
-            new_fc = nn.Linear(in_features, new_out_features)
-            
-            # copy previous weights and biases
-            old_weights = self.fc_layers[layer_index].weight.data.clone()
-            old_biases = self.fc_layers[layer_index].bias.data.clone()
-            
-            # randimize weights initialization
-            new_fc.weight.data[:old_out_features] = old_weights
-            new_fc.bias.data[:old_out_features] = old_biases
-            
-            # mean weights initialization
-            if self.init_weights_type == "mean":
-                n_added_rules = int((new_out_features - old_out_features) / layer.out_features_per_rule)
-                init_weights = torch.reshape(old_weights, [layer.out_features_per_rule, old_weights.shape[1], layer.n_rules - n_added_rules]).mean(2)
-                init_biases = torch.reshape(old_biases, [layer.out_features_per_rule, layer.n_rules - n_added_rules]).mean(1)
-                new_fc.weight.data[old_out_features:] = init_weights.repeat(n_added_rules, 1)
-                new_fc.bias.data[old_out_features:] = init_biases.repeat(n_added_rules)
-
-            if self.init_weights_type == "in_paper":
-                new_fc.weight.data[old_out_features:] = torch.randint(0, 2, [new_out_features - old_out_features, in_features]) / (in_features+1)
-                new_fc.bias.data[old_out_features:] = torch.randint(0, 2, [new_out_features - old_out_features]) / (in_features+1)
-
-            # update self.layers[layer_index]
-            self.fc_layers[layer_index] = new_fc
-
-    # -----------------------------------------------------------------------
-    def apply_rule_strength(self, layer_index: int, X: torch.Tensor, lambdas: torch.Tensor) -> torch.Tensor:
-        """
-        Compute the lambda function for the given layer.
-
-        X.shape = (batch, Rule * out_features)
-        lambdas.shape = (batch, Rule)
-
-        return.shape = (batch, out_features)
-        """     
-        # Extract number of outputs and rules from the layer info
-        # n_outputs = self.layers_info[layer_index].out_features_per_rule
-        n_outputs = self.neurons[layer_index + 1]
-        # n_outputs = layer_index
-        n_samples, n_rules = lambdas.shape
-        
-        ### method 1 ### [647s for rep=10000, batch=128]
-        # s = time()
-        # for _ in range(10000):
-        #     # create lambda-eye matricx -> shape(n_samples, n_outputs, n_outputs * n_rules)
-        #     lambda_eye = torch.zeros(n_samples, n_outputs, n_outputs * n_rules)
-        #     for m, sample in enumerate(lambdas):
-        #         for n, rul in enumerate(sample):
-        #             lambda_eye[m, :, n*n_outputs:(n+1)*n_outputs] = rul * torch.eye(n_outputs)
-        #     # Apply the lambda matrices to the input tensor
-        #     # lambda_eye.shape: (n_samples, n_outputs, n_outputs * n_rules)
-        #     # X.shape: (n_samples, n_inputs) --unsqueeze--> (n_samples, 1, n_inputs) --mT--> (n_samples, n_inputs, 1)
-        #     # result.shape: (n_samples, n_outputs, 1) -> (n_samples, n_outputs)
-        #     X1 = torch.einsum('sou,sul->so', lambda_eye, X.unsqueeze(1).mT) # s:sample, o:output, u:rule*output
-        # print("1",time()-s)
-
-        ### method 2 ### [586s for rep=1000, batch=128]
-        # s = time()
-        # for _ in range(10000):
-        #     # create lambda-eye matricx -> shape(n_samples, n_outputs, n_outputs * n_rules)
-        #     lambda_eye = torch.zeros(n_samples, n_outputs, n_outputs * n_rules)
-        #     for m, sample in enumerate(lambdas):
-        #         for n, rul in enumerate(sample):
-        #             lambda_eye[m, :, n*n_outputs:(n+1)*n_outputs] = rul * torch.eye(n_outputs)
-        #     # Apply the lambda matrices to the input tensor
-        #     # lambda_eye.shape: (n_samples, n_outputs, n_outputs * n_rules)
-        #     # X.shape: (n_samples, n_inputs) --unsqueeze--> (n_samples, 1, n_inputs) --mT--> (n_samples, n_inputs, 1)
-        #     # result.shape: (n_samples, n_outputs, 1) -> (n_samples, n_outputs)
-        #     X2 = torch.matmul(lambda_eye, X.unsqueeze(1).mT).squeeze(2) # another way
-        # print("2",time()-s)
-
-        ### method 3 ### [106s for rep=1000, batch=128]
-        # s = time()
-        # for _ in range(10000):
-        #     X3 = torch.zeros([n_samples, n_outputs])
-        #     for i, (lamb_B, X_B) in enumerate(zip(lambdas, X)):
-        #         X3[i,:] = (X_B.reshape((n_rules, n_outputs)).t() * lamb_B.unsqueeze(0)).sum(1)
-        # print("3",time()-s)
-
-        ### method 4 ### [2s for rep=1000, batch=128]
-        # s = time()
-        # for _ in range(10000):
-        #     X4 = torch.einsum("lrs,ros->los",
-        #         lambdas.mT.unsqueeze(0),
-        #         X.mT.reshape([n_rules, n_outputs, n_samples])
-        #     ).mT.squeeze(0)
-        # print("4",time()-s)
-
-        ### method 5 ### [2s for rep=1000, batch=128]
-        # l:1, R:n_rule, O:n_out, S:n_sample
-        # return torch.einsum("lRS,ROS->lOS",
-        #     lambdas.mT.reshape([1, n_rules, n_samples]),
-        #     X.mT.reshape([n_rules, n_outputs, n_samples])
-        # ).mT.reshape(n_samples, n_outputs)
-        return torch.einsum("lRS,ROS->lOS",
-            lambdas.transpose(1,0).reshape([1, n_rules, n_samples]),
-            X.transpose(1,0).reshape([n_rules, n_outputs, n_samples])
-        ).transpose(1,0).reshape(n_samples, n_outputs)
 
     # -----------------------------------------------------------------------
     def set_options(self, num_epochs: int = 10, 
@@ -423,6 +290,6 @@ class SOMFNN(nn.Module):
         average_loss = total_loss / len(dataloader)
         print(f"Test Loss: {average_loss:.4f}")
 
-def Solayer(in_features, out_features):
-    from SOLAYER import SOLAYER
-    return SOLAYER(in_features, out_features)
+# def Solayer(in_features, out_features):
+#     from SOLAYER import SOLAYER
+#     return SOLAYER(in_features, out_features)
